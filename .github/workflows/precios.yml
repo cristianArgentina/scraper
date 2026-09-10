@@ -1,12 +1,8 @@
 name: Actualizar precios
 
 on:
-  push:
-    branches:
-      - main
-
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '0 8 * * *'
       timezone: 'America/Argentina/Buenos_Aires'
 
   workflow_dispatch:
