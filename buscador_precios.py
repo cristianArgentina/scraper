@@ -88,7 +88,7 @@ LINEAS = [
         "busqueda": "dove-bond-repair",
         "busqueda_por_sitio": {"perfumeriaspigmento": "bond-repair"},
         "incluir": ["bond"],
-        "excluir": [r"200\s*(ml|cc)", r"193\s*(ml|cc)"],
+        "excluir": [r"200\s*(ml|cc)", r"193\s*(ml|cc)", r"385\s*(ml|cc)"],
     },
     {
         "nombre": "Dove UV Repair",
