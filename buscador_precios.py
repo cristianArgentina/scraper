@@ -21,6 +21,8 @@ import random
 import os
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
+ZONA_HORARIA = ZoneInfo("America/Argentina/Buenos_Aires")
 
 import requests
 from bs4 import BeautifulSoup
@@ -828,7 +830,7 @@ def escribir_resumen_en_google_sheets(filas_resumen: list, sitios_todos: list):
     cliente = gspread.authorize(creds)
     planilla = cliente.open_by_key(SPREADSHEET_ID)
 
-    sufijo_fecha = datetime.now().strftime("%Y-%m-%d_%H%M")
+    sufijo_fecha = datetime.now(ZONA_HORARIA).strftime("%Y-%m-%d_%H%M")
     nombre_hoja = f"{NOMBRE_HOJA_RESUMEN}_{sufijo_fecha}"
     hoja = planilla.add_worksheet(
         title=nombre_hoja, rows=len(filas_resumen) + 5, cols=20
@@ -857,7 +859,7 @@ def escribir_resumen_en_google_sheets(filas_resumen: list, sitios_todos: list):
 # MAIN
 # -----------------------------------------------------------------------
 def main():
-    fecha = datetime.now().strftime("%Y-%m-%d %H:%M")
+    fecha = datetime.now(ZONA_HORARIA).strftime("%Y-%m-%d %H:%M")
     filas = []
 
     for linea in LINEAS:
@@ -1057,7 +1059,7 @@ def main():
 
         pausa_entre_pedidos()
 
-    nombre_archivo = f"precios_lineas_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+    nombre_archivo = f"precios_lineas_{datetime.now(ZONA_HORARIA).strftime('%Y%m%d_%H%M')}.csv"
     with open(nombre_archivo, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,
