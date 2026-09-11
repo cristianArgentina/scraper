@@ -20,8 +20,10 @@ import time
 import random
 import os
 import json
+import unicodedata
 from datetime import datetime
 from zoneinfo import ZoneInfo
+
 ZONA_HORARIA = ZoneInfo("America/Argentina/Buenos_Aires")
 
 import requests
@@ -397,6 +399,7 @@ EANS_IMAGEN_PROCESADOS = set()
 # Nuevas imágenes que se subirán a Google Sheets al finalizar.
 NUEVAS_IMAGENES = []
 
+
 def es_url_imagen_valida(url):
     if not url:
         return False
@@ -406,11 +409,9 @@ def es_url_imagen_valida(url):
 
     url = url.strip()
 
-    return (
-        url.startswith("http://")
-        or url.startswith("https://")
-    )
-    
+    return url.startswith("http://") or url.startswith("https://")
+
+
 def extraer_imagen_de_datos(datos):
     """
     Extrae una URL de imagen sin hacer ninguna petición adicional.
@@ -483,6 +484,8 @@ def extraer_imagen_de_datos(datos):
         return None
 
     return recorrer(datos)
+
+
 # -----------------------------------------------------------------------
 # DESCUBRIMIENTO DE PRODUCTOS
 # -----------------------------------------------------------------------
@@ -512,7 +515,7 @@ def buscar_productos_vtex(dominio: str, busqueda):
                 if not items:
                     continue
                 item = items[0]
-                
+
                 productos_termino.append(
                     {
                         "nombre": p.get("productName", ""),
@@ -522,7 +525,7 @@ def buscar_productos_vtex(dominio: str, busqueda):
                         "imageurl": extraer_imagen_de_datos(item),
                     }
                 )
-                
+
             CACHE_BUSQUEDA[clave_cache] = productos_termino
             pausa_entre_pedidos()
 
@@ -594,7 +597,7 @@ def buscar_productos_coto(busqueda):
                         "imageurl": extraer_imagen_de_datos(d),
                     }
                 )
-                
+
             CACHE_BUSQUEDA[clave_cache] = productos_termino
             pausa_entre_pedidos()
 
@@ -606,22 +609,75 @@ def buscar_productos_coto(busqueda):
     return list(productos_por_sku.values()), None
 
 
+def normalizar_nombre_paradineiro(texto):
+    """
+    Normaliza nombres para poder comparar el nombre del producto
+    del listado HTML con el nombre que aparece en createProductsListedEvent.
+    """
+    texto = unicodedata.normalize("NFD", texto or "")
+    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
+    texto = texto.lower()
+    texto = re.sub(r"\s+", " ", texto).strip()
+    return texto
+
+
+def buscar_ean_paradineiro(nombre, mapa_ean):
+    """
+    Busca el EAN correspondiente al nombre del producto.
+
+    Primero intenta coincidencia exacta. Si no encuentra, intenta
+    una coincidencia muy similar para casos como:
+    'Univ 750' vs 'Universal 750 ml'.
+    """
+    nombre_norm = normalizar_nombre_paradineiro(nombre)
+
+    # 1) Coincidencia exacta
+    if nombre_norm in mapa_ean:
+        return mapa_ean[nombre_norm][0]
+
+    # 2) Coincidencia aproximada muy conservadora
+    from difflib import SequenceMatcher
+
+    mejor_ean = None
+    mejor_score = 0
+    segundo_score = 0
+
+    for nombre_evento, eans in mapa_ean.items():
+        score = SequenceMatcher(None, nombre_norm, nombre_evento).ratio()
+
+        if score > mejor_score:
+            segundo_score = mejor_score
+            mejor_score = score
+            mejor_ean = eans[0] if eans else None
+        elif score > segundo_score:
+            segundo_score = score
+
+    # Solo aceptamos coincidencias muy fuertes
+    # y evitamos casos donde hay dos candidatos demasiado parecidos.
+    if mejor_ean and mejor_score >= 0.92 and (mejor_score - segundo_score >= 0.02):
+        return mejor_ean
+
+    return None
+
+
 def buscar_productos_paradineiro(busqueda):
     """
-    Busca una línea de producto (uno o varios términos) en Paradineiro
-    Farmacias. A diferencia de VTEX y Coto, esta plataforma trae el
-    precio final (y si está "SIN STOCK") en la misma respuesta de
-    búsqueda, sin necesitar una segunda consulta por producto.
-    No expone EAN en el listado, así que estos productos no van a
-    aparecer agrupados en la pestaña de resumen por EAN (solo en el log
-    detallado), a menos que más adelante encontremos el EAN en la
-    página de cada producto.
+    Busca una línea de producto en Paradineiro Farmacias.
+
+    Además de precio, stock e imagen, obtiene los EAN que Paradineiro
+    incluye dentro de createProductsListedEvent() en el HTML de la
+    búsqueda.
     """
+
     productos_por_id = {}
+
     for termino in normalizar_terminos(busqueda):
+
         clave_cache = ("paradineiro", "paradineiro", termino)
+
         if clave_cache in CACHE_BUSQUEDA:
             productos_termino = CACHE_BUSQUEDA[clave_cache]
+
         else:
             try:
                 resp = request_con_reintentos(
@@ -631,42 +687,98 @@ def buscar_productos_paradineiro(busqueda):
                     params={"s": termino},
                 )
                 resp.raise_for_status()
+
             except Exception as e:
                 return None, f"error de búsqueda ('{termino}'): {e}"
 
+            # ---------------------------------------------------------
+            # EXTRAER EAN DEL createProductsListedEvent()
+            # ---------------------------------------------------------
+
+            mapa_ean_paradineiro = {}
+
+            patron_ean = re.compile(
+                r"\{\s*"
+                r"a:\s*'([^']*)'\s*,\s*"
+                r"b:\s*'([^']*)'\s*,\s*"
+                r"c:\s*'([^']*)'\s*,\s*"
+                r"d:\s*'([^']*)'",
+                re.IGNORECASE,
+            )
+
+            for match in patron_ean.finditer(resp.text):
+
+                eans = [e.strip() for e in match.group(1).split(",") if e.strip()]
+
+                nombre_evento = match.group(2).strip()
+
+                if eans and nombre_evento:
+                    mapa_ean_paradineiro[
+                        normalizar_nombre_paradineiro(nombre_evento)
+                    ] = eans
+
+            # ---------------------------------------------------------
+            # EXTRAER PRODUCTOS DEL HTML
+            # ---------------------------------------------------------
+
             soup = BeautifulSoup(resp.text, "html.parser")
+
             productos_termino = []
+
             for li in soup.select("li.product"):
+
                 contenedor = li.select_one("div[data-product]")
+
                 producto_id = contenedor.get("data-product") if contenedor else None
+
                 if not producto_id:
                     continue
 
                 a_tag = li.find("a", href=True)
+
                 if not a_tag:
                     continue
+
                 link = PARADINEIRO_DOMINIO + a_tag["href"]
 
                 titulo_tag = li.select_one("h3.kw-details-title span.child-top")
+
                 nombre = titulo_tag.get_text(strip=True) if titulo_tag else None
 
+                # -----------------------------------------------------
+                # PRECIO
+                # -----------------------------------------------------
+
                 precio = None
+
                 precio_tag = li.select_one("span.price")
+
                 if precio_tag:
-                    # El precio final es el <span class="amount"> que NO está
-                    # dentro de un <del> (ese es el precio de lista tachado).
+
+                    # El precio final es el amount que NO está
+                    # dentro de un <del>.
                     for amt in precio_tag.find_all("span", class_="amount"):
                         if amt.find_parent("del"):
                             continue
+
                         precio = parsear_precio_ar(amt.get_text())
 
+                # -----------------------------------------------------
+                # STOCK
+                # -----------------------------------------------------
+
                 sin_stock = "SIN STOCK" in li.get_text().upper()
+
+                # -----------------------------------------------------
+                # IMAGEN
+                # -----------------------------------------------------
 
                 imagen_url = None
 
                 img_tag = li.select_one("img")
 
                 if img_tag:
+
                     imagen_url = (
                         img_tag.get("src")
                         or img_tag.get("data-src")
@@ -675,25 +787,47 @@ def buscar_productos_paradineiro(busqueda):
 
                     if imagen_url and imagen_url.startswith("//"):
                         imagen_url = "https:" + imagen_url
+
                     elif imagen_url and imagen_url.startswith("/"):
                         imagen_url = PARADINEIRO_DOMINIO.rstrip("/") + imagen_url
+
+                # -----------------------------------------------------
+                # EAN
+                # -----------------------------------------------------
+
+                ean = buscar_ean_paradineiro(nombre, mapa_ean_paradineiro)
+
+                if not ean and nombre:
+                    print(f"[EAN NO ENCONTRADO] Paradineiro: {nombre}")
+
+                elif ean:
+                    print(f"[EAN ENCONTRADO] Paradineiro: " f"{ean} -> {nombre}")
 
                 productos_termino.append(
                     {
                         "sku_id": producto_id,
                         "nombre": nombre,
                         "precio": precio,
-                        "disponibilidad": "sin_stock" if sin_stock else "available",
+                        "disponibilidad": ("sin_stock" if sin_stock else "available"),
                         "url": link,
                         "imageurl": imagen_url,
+                        "ean": ean,
                     }
                 )
+
             CACHE_BUSQUEDA[clave_cache] = productos_termino
+
             pausa_entre_pedidos()
 
+        # -------------------------------------------------------------
+        # EVITAR DUPLICADOS ENTRE TÉRMINOS DE UNA MISMA LÍNEA
+        # -------------------------------------------------------------
+
         for prod in productos_termino:
+
             if prod["sku_id"] in productos_por_id:
                 continue
+
             productos_por_id[prod["sku_id"]] = prod
 
     return list(productos_por_id.values()), None
@@ -778,7 +912,8 @@ def obtener_precio_simulacion_promo_2u(
         "precio": precio_por_unidad,
         "disponibilidad": f"promo: {nombre_promo}" if nombre_promo else disponible,
     }
-    
+
+
 def cargar_cache_imagenes(planilla):
     """
     Lee una sola vez la pestaña Imagenes_Productos.
@@ -799,23 +934,11 @@ def cargar_cache_imagenes(planilla):
 
     except gspread.exceptions.WorksheetNotFound:
 
-        print(
-            f"[IMAGENES] Creando pestaña '{NOMBRE_HOJA_IMAGENES}'..."
-        )
+        print(f"[IMAGENES] Creando pestaña '{NOMBRE_HOJA_IMAGENES}'...")
 
-        hoja = planilla.add_worksheet(
-            title=NOMBRE_HOJA_IMAGENES,
-            rows=2000,
-            cols=3
-        )
+        hoja = planilla.add_worksheet(title=NOMBRE_HOJA_IMAGENES, rows=2000, cols=3)
 
-        hoja.append_row(
-            [
-                "ean",
-                "imageurl",
-                "fuente"
-            ]
-        )
+        hoja.append_row(["ean", "imageurl", "fuente"])
 
         return {}
 
@@ -824,10 +947,7 @@ def cargar_cache_imagenes(planilla):
     if not valores:
         return {}
 
-    encabezados = [
-        str(x).strip().lower()
-        for x in valores[0]
-    ]
+    encabezados = [str(x).strip().lower() for x in valores[0]]
 
     try:
         indice_ean = encabezados.index("ean")
@@ -839,11 +959,7 @@ def cargar_cache_imagenes(planilla):
         )
         return {}
 
-    indice_fuente = (
-        encabezados.index("fuente")
-        if "fuente" in encabezados
-        else None
-    )
+    indice_fuente = encabezados.index("fuente") if "fuente" in encabezados else None
 
     cache = {}
 
@@ -852,9 +968,7 @@ def cargar_cache_imagenes(planilla):
         if len(fila) <= indice_ean:
             continue
 
-        ean = str(
-            fila[indice_ean]
-        ).strip()
+        ean = str(fila[indice_ean]).strip()
 
         if not ean:
             continue
@@ -862,33 +976,23 @@ def cargar_cache_imagenes(planilla):
         imageurl = ""
 
         if len(fila) > indice_imagen:
-            imageurl = str(
-                fila[indice_imagen]
-            ).strip()
+            imageurl = str(fila[indice_imagen]).strip()
 
         if not es_url_imagen_valida(imageurl):
             continue
 
         fuente = ""
 
-        if (
-            indice_fuente is not None
-            and len(fila) > indice_fuente
-        ):
-            fuente = str(
-                fila[indice_fuente]
-            ).strip()
+        if indice_fuente is not None and len(fila) > indice_fuente:
+            fuente = str(fila[indice_fuente]).strip()
 
-        cache[ean] = {
-            "imageurl": imageurl,
-            "fuente": fuente
-        }
+        cache[ean] = {"imageurl": imageurl, "fuente": fuente}
 
-    print(
-        f"[IMAGENES] {len(cache)} EAN con imagen ya almacenados."
-    )
+    print(f"[IMAGENES] {len(cache)} EAN con imagen ya almacenados.")
 
     return cache
+
+
 def registrar_imagen(ean, imageurl, fuente):
 
     if not ean:
@@ -909,27 +1013,16 @@ def registrar_imagen(ean, imageurl, fuente):
 
     EANS_IMAGEN_PROCESADOS.add(ean)
 
-    registro = {
-        "imageurl": imageurl.strip(),
-        "fuente": fuente
-    }
+    registro = {"imageurl": imageurl.strip(), "fuente": fuente}
 
     CACHE_IMAGENES[ean] = registro
 
-    NUEVAS_IMAGENES.append(
-        {
-            "ean": ean,
-            "imageurl": imageurl.strip(),
-            "fuente": fuente
-        }
-    )
+    NUEVAS_IMAGENES.append({"ean": ean, "imageurl": imageurl.strip(), "fuente": fuente})
 
-    print(
-        f"    [IMAGEN NUEVA] "
-        f"EAN {ean} → {fuente}"
-    )
+    print(f"    [IMAGEN NUEVA] " f"EAN {ean} → {fuente}")
 
     return True
+
 
 def guardar_nuevas_imagenes(planilla):
     """
@@ -944,31 +1037,21 @@ def guardar_nuevas_imagenes(planilla):
     try:
         hoja = planilla.worksheet(NOMBRE_HOJA_IMAGENES)
     except gspread.exceptions.WorksheetNotFound:
-        hoja = planilla.add_worksheet(
-            title=NOMBRE_HOJA_IMAGENES,
-            rows=2000,
-            cols=3
-        )
+        hoja = planilla.add_worksheet(title=NOMBRE_HOJA_IMAGENES, rows=2000, cols=3)
         hoja.append_row(["ean", "imageurl", "fuente"])
 
     filas = [
-        [
-            item["ean"],
-            item["imageurl"],
-            item["fuente"]
-        ]
-        for item in NUEVAS_IMAGENES
+        [item["ean"], item["imageurl"], item["fuente"]] for item in NUEVAS_IMAGENES
     ]
 
-    hoja.append_rows(
-        filas,
-        value_input_option="USER_ENTERED"
-    )
+    hoja.append_rows(filas, value_input_option="USER_ENTERED")
 
     print(
         f"[IMAGENES] {len(filas)} imágenes nuevas guardadas "
         f"en '{NOMBRE_HOJA_IMAGENES}'."
     )
+
+
 # -----------------------------------------------------------------------
 # GOOGLE SHEETS
 # -----------------------------------------------------------------------
@@ -1184,18 +1267,16 @@ def main():
     fecha = datetime.now(ZONA_HORARIA).strftime("%Y-%m-%d %H:%M")
     filas = []
 
-# -------------------------------------------------------------------
-# CARGAR IMÁGENES EXISTENTES
-# -------------------------------------------------------------------
+    # -------------------------------------------------------------------
+    # CARGAR IMÁGENES EXISTENTES
+    # -------------------------------------------------------------------
 
     try:
         creds = obtener_credenciales_google()
         cliente = gspread.authorize(creds)
         planilla = cliente.open_by_key(SPREADSHEET_ID)
 
-        CACHE_IMAGENES.update(
-            cargar_cache_imagenes(planilla)
-        )
+        CACHE_IMAGENES.update(cargar_cache_imagenes(planilla))
 
     except Exception as e:
         print(
@@ -1203,7 +1284,7 @@ def main():
             f"{type(e).__name__}: {e}"
         )
         planilla = None
-    
+
     for linea in LINEAS:
         print(f"\n=== Línea: {linea['nombre']} ===")
 
@@ -1280,13 +1361,9 @@ def main():
                 }
                 if str(prod.get("ean") or "").strip() in EAN_EXCLUIDOS:
                     continue
-                
+
                 if prod.get("ean") and prod.get("imageurl"):
-                    registrar_imagen(
-                        prod["ean"],
-                        prod["imageurl"],
-                        sitio["sitio"]
-                    )
+                    registrar_imagen(prod["ean"], prod["imageurl"], sitio["sitio"])
                 if fila["precio"] is None:
                     print(
                         f"    [sin precio, descartado] {fila['producto']} ({fila['disponibilidad']})"
@@ -1344,11 +1421,7 @@ def main():
                     continue
 
                 if prod.get("ean") and prod.get("imageurl"):
-                    registrar_imagen(
-                        prod["ean"],
-                        prod["imageurl"],
-                        "coto"
-                    )
+                    registrar_imagen(prod["ean"], prod["imageurl"], "coto")
                 if fila["precio"] is None:
                     print(
                         f"    [sin precio, descartado] {fila['producto']} ({fila['disponibilidad']})"
@@ -1402,8 +1475,16 @@ def main():
                     "disponibilidad": prod["disponibilidad"],
                     "error": "",
                     "url": prod["url"],
-                    "ean": None,
+                    "ean": prod.get("ean"), 
                 }
+                if str(prod.get("ean") or "").strip() in EAN_EXCLUIDOS:
+                    continue
+                if prod.get("ean") and prod.get("imageurl"):
+                    registrar_imagen(
+                        prod["ean"],
+                        prod["imageurl"],
+                        "paradineiro"
+                    )
                 if fila["precio"] is None:
                     print(
                         f"    [sin precio, descartado] {fila['producto']} ({fila['disponibilidad']})"
@@ -1419,7 +1500,9 @@ def main():
 
         pausa_entre_pedidos()
 
-    nombre_archivo = f"precios_lineas_{datetime.now(ZONA_HORARIA).strftime('%Y%m%d_%H%M')}.csv"
+    nombre_archivo = (
+        f"precios_lineas_{datetime.now(ZONA_HORARIA).strftime('%Y%m%d_%H%M')}.csv"
+    )
     with open(nombre_archivo, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,
@@ -1450,16 +1533,13 @@ def main():
             creds = obtener_credenciales_google()
             cliente = gspread.authorize(creds)
             planilla = cliente.open_by_key(SPREADSHEET_ID)
-    
+
         guardar_nuevas_imagenes(planilla)
-    
+
     except Exception as e:
-    
-        print(
-            f"\n[ERROR guardando imágenes]: "
-            f"{type(e).__name__}: {e}"
-        )
-    
+
+        print(f"\n[ERROR guardando imágenes]: " f"{type(e).__name__}: {e}")
+
     try:
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
