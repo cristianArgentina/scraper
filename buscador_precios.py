@@ -82,6 +82,13 @@ EXCLUIR_GLOBAL = [
     r"excellence",
 ]
 
+EAN_EXCLUIDOS = {
+    "7509552859133",
+    "7891150104822",
+    "25066",
+    "20279",
+}
+
 LINEAS = [
     {
         "nombre": "Dove Bond Repair",
@@ -1271,6 +1278,9 @@ def main():
                     "url": prod.get("link", ""),
                     "ean": prod.get("ean"),
                 }
+                if str(prod.get("ean") or "").strip() in EAN_EXCLUIDOS:
+                    continue
+                
                 if prod.get("ean") and prod.get("imageurl"):
                     registrar_imagen(
                         prod["ean"],
@@ -1330,6 +1340,9 @@ def main():
                     "url": prod["url"],
                     "ean": prod.get("ean"),
                 }
+                if str(prod.get("ean") or "").strip() in EAN_EXCLUIDOS:
+                    continue
+
                 if prod.get("ean") and prod.get("imageurl"):
                     registrar_imagen(
                         prod["ean"],
