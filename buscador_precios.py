@@ -38,7 +38,7 @@ NOMBRE_HOJA_LOG = "Precios_Log_Lineas"  # pestaña nueva, separada de la anterio
 NOMBRE_HOJA_RESUMEN = (
     "Resumen_Por_Producto"  # agrupado por EAN, se sobrescribe cada corrida
 )
-
+NOMBRE_HOJA_IMAGENES = "Imagenes_Productos"
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -372,7 +372,91 @@ def normalizar_terminos(busqueda):
 # -----------------------------------------------------------------------
 CACHE_BUSQUEDA = {}
 
+# -----------------------------------------------------------------------
+# CACHÉ DE IMÁGENES
+#
+# Se carga una sola vez desde Google Sheets al comenzar la ejecución.
+# EAN -> {"imageurl": "...", "fuente": "..."}
+#
+# De esta manera, si un EAN ya tiene imagen, no volvemos a buscarla.
+# -----------------------------------------------------------------------
+CACHE_IMAGENES = {}
 
+# EAN que durante ESTA corrida ya fueron procesados.
+# Evita intentar obtener la misma imagen varias veces si el producto
+# aparece en varios comercios/líneas.
+EANS_IMAGEN_PROCESADOS = set()
+
+# Nuevas imágenes que se subirán a Google Sheets al finalizar.
+NUEVAS_IMAGENES = []
+
+def es_url_imagen_valida(url):
+    if not url:
+        return False
+
+    if not isinstance(url, str):
+        return False
+
+    url = url.strip()
+
+    return (
+        url.startswith("http://")
+        or url.startswith("https://")
+    )
+    
+def extraer_imagen_de_datos(datos):
+    """
+    Busca recursivamente una URL de imagen dentro de una respuesta JSON.
+
+    Prioriza nombres de campos habituales:
+        imageUrl
+        image_url
+        imageURL
+        image
+        url
+
+    No hace ninguna petición adicional.
+    """
+
+    campos_prioritarios = [
+        "imageUrl",
+        "image_url",
+        "imageURL",
+        "image",
+        "imageurl",
+        "imageUri",
+        "image_uri",
+    ]
+
+    def recorrer(obj):
+
+        if isinstance(obj, dict):
+
+            # Primero buscamos campos claramente identificados como imagen.
+            for campo in campos_prioritarios:
+                valor = obj.get(campo)
+
+                if isinstance(valor, str) and es_url_imagen_valida(valor):
+                    return valor.strip()
+
+            # Después recorremos estructuras anidadas.
+            for valor in obj.values():
+                resultado = recorrer(valor)
+
+                if resultado:
+                    return resultado
+
+        elif isinstance(obj, list):
+
+            for elemento in obj:
+                resultado = recorrer(elemento)
+
+                if resultado:
+                    return resultado
+
+        return None
+
+    return recorrer(datos)
 # -----------------------------------------------------------------------
 # DESCUBRIMIENTO DE PRODUCTOS
 # -----------------------------------------------------------------------
@@ -401,14 +485,18 @@ def buscar_productos_vtex(dominio: str, busqueda):
                 items = p.get("items", [])
                 if not items:
                     continue
+                item = items[0]
+                
                 productos_termino.append(
                     {
                         "nombre": p.get("productName", ""),
-                        "sku_id": items[0].get("itemId"),
+                        "sku_id": item.get("itemId"),
                         "link": p.get("link"),
-                        "ean": items[0].get("ean"),
+                        "ean": item.get("ean"),
+                        "imageurl": extraer_imagen_de_datos(item),
                     }
                 )
+                
             CACHE_BUSQUEDA[clave_cache] = productos_termino
             pausa_entre_pedidos()
 
@@ -477,8 +565,10 @@ def buscar_productos_coto(busqueda):
                         ),
                         "url": url_completa,
                         "ean": d.get("product_main_ean"),
+                        "imageurl": extraer_imagen_de_datos(d),
                     }
                 )
+                
             CACHE_BUSQUEDA[clave_cache] = productos_termino
             pausa_entre_pedidos()
 
@@ -553,8 +643,32 @@ def buscar_productos_paradineiro(busqueda):
                         "precio": precio,
                         "disponibilidad": "sin_stock" if sin_stock else "available",
                         "url": link,
+                        "imageurl": imagen_url,
                     }
                 )
+                imagen_url = None
+
+                img_tag = li.select_one("img")
+                
+                if img_tag:
+                
+                    imagen_url = (
+                        img_tag.get("src")
+                        or img_tag.get("data-src")
+                        or img_tag.get("data-lazy-src")
+                    )
+                
+                    if imagen_url and imagen_url.startswith("//"):
+                        imagen_url = "https:" + imagen_url
+                
+                    elif (
+                        imagen_url
+                        and imagen_url.startswith("/")
+                    ):
+                        imagen_url = (
+                            PARADINEIRO_DOMINIO.rstrip("/")
+                            + imagen_url
+                        )
             CACHE_BUSQUEDA[clave_cache] = productos_termino
             pausa_entre_pedidos()
 
@@ -645,8 +759,158 @@ def obtener_precio_simulacion_promo_2u(
         "precio": precio_por_unidad,
         "disponibilidad": f"promo: {nombre_promo}" if nombre_promo else disponible,
     }
+    
+def cargar_cache_imagenes(planilla):
+    """
+    Lee una sola vez la pestaña Imagenes_Productos.
 
+    Devuelve:
+        {
+            "EAN": {
+                "imageurl": "...",
+                "fuente": "..."
+            }
+        }
 
+    Si la hoja no existe, la crea.
+    """
+
+    try:
+        hoja = planilla.worksheet(NOMBRE_HOJA_IMAGENES)
+
+    except gspread.exceptions.WorksheetNotFound:
+
+        print(
+            f"[IMAGENES] Creando pestaña '{NOMBRE_HOJA_IMAGENES}'..."
+        )
+
+        hoja = planilla.add_worksheet(
+            title=NOMBRE_HOJA_IMAGENES,
+            rows=2000,
+            cols=3
+        )
+
+        hoja.append_row(
+            [
+                "ean",
+                "imageurl",
+                "fuente"
+            ]
+        )
+
+        return {}
+
+    valores = hoja.get_all_values()
+
+    if not valores:
+        return {}
+
+    encabezados = [
+        str(x).strip().lower()
+        for x in valores[0]
+    ]
+
+    try:
+        indice_ean = encabezados.index("ean")
+        indice_imagen = encabezados.index("imageurl")
+    except ValueError:
+        print(
+            f"[IMAGENES] La hoja '{NOMBRE_HOJA_IMAGENES}' "
+            "no tiene los encabezados esperados."
+        )
+        return {}
+
+    indice_fuente = (
+        encabezados.index("fuente")
+        if "fuente" in encabezados
+        else None
+    )
+
+    cache = {}
+
+    for fila in valores[1:]:
+
+        if len(fila) <= indice_ean:
+            continue
+
+        ean = str(
+            fila[indice_ean]
+        ).strip()
+
+        if not ean:
+            continue
+
+        imageurl = ""
+
+        if len(fila) > indice_imagen:
+            imageurl = str(
+                fila[indice_imagen]
+            ).strip()
+
+        if not es_url_imagen_valida(imageurl):
+            continue
+
+        fuente = ""
+
+        if (
+            indice_fuente is not None
+            and len(fila) > indice_fuente
+        ):
+            fuente = str(
+                fila[indice_fuente]
+            ).strip()
+
+        cache[ean] = {
+            "imageurl": imageurl,
+            "fuente": fuente
+        }
+
+    print(
+        f"[IMAGENES] {len(cache)} EAN con imagen ya almacenados."
+    )
+
+    return cache
+def registrar_imagen(ean, imageurl, fuente):
+
+    if not ean:
+        return False
+
+    ean = str(ean).strip()
+
+    if not es_url_imagen_valida(imageurl):
+        return False
+
+    # Ya existe en Google Sheets.
+    if ean in CACHE_IMAGENES:
+        return False
+
+    # Ya conseguimos una imagen durante esta corrida.
+    if ean in EANS_IMAGEN_PROCESADOS:
+        return False
+
+    EANS_IMAGEN_PROCESADOS.add(ean)
+
+    registro = {
+        "imageurl": imageurl.strip(),
+        "fuente": fuente
+    }
+
+    CACHE_IMAGENES[ean] = registro
+
+    NUEVAS_IMAGENES.append(
+        {
+            "ean": ean,
+            "imageurl": imageurl.strip(),
+            "fuente": fuente
+        }
+    )
+
+    print(
+        f"    [IMAGEN NUEVA] "
+        f"EAN {ean} → {fuente}"
+    )
+
+    return True
 # -----------------------------------------------------------------------
 # GOOGLE SHEETS
 # -----------------------------------------------------------------------
@@ -862,6 +1126,26 @@ def main():
     fecha = datetime.now(ZONA_HORARIA).strftime("%Y-%m-%d %H:%M")
     filas = []
 
+# -------------------------------------------------------------------
+# CARGAR IMÁGENES EXISTENTES
+# -------------------------------------------------------------------
+
+try:
+    creds = obtener_credenciales_google()
+    cliente = gspread.authorize(creds)
+    planilla = cliente.open_by_key(SPREADSHEET_ID)
+
+    CACHE_IMAGENES.update(
+        cargar_cache_imagenes(planilla)
+    )
+
+except Exception as e:
+    print(
+        f"[AVISO] No se pudo cargar la caché de imágenes: "
+        f"{type(e).__name__}: {e}"
+    )
+    planilla = None
+    
     for linea in LINEAS:
         print(f"\n=== Línea: {linea['nombre']} ===")
 
@@ -936,6 +1220,12 @@ def main():
                     "url": prod.get("link", ""),
                     "ean": prod.get("ean"),
                 }
+                if prod.get("ean") and prod.get("imageurl"):
+                    registrar_imagen(
+                        prod["ean"],
+                        prod["imageurl"],
+                        sitio["sitio"]
+                    )
                 if fila["precio"] is None:
                     print(
                         f"    [sin precio, descartado] {fila['producto']} ({fila['disponibilidad']})"
@@ -989,6 +1279,12 @@ def main():
                     "url": prod["url"],
                     "ean": prod.get("ean"),
                 }
+                if prod.get("ean") and prod.get("imageurl"):
+                    registrar_imagen(
+                        prod["ean"],
+                        prod["imageurl"],
+                        "coto"
+                    )
                 if fila["precio"] is None:
                     print(
                         f"    [sin precio, descartado] {fila['producto']} ({fila['disponibilidad']})"
@@ -1084,6 +1380,28 @@ def main():
     except Exception as e:
         print(f"\n[ERROR subiendo a Google Sheets]: {type(e).__name__}: {e}")
 
+    try:
+
+        if planilla is None:
+            creds = obtener_credenciales_google()
+            cliente = gspread.authorize(creds)
+            planilla = cliente.open_by_key(SPREADSHEET_ID)
+    
+        # Si la hoja todavía no existe, la creamos.
+        if not CACHE_IMAGENES:
+            CACHE_IMAGENES.update(
+                cargar_cache_imagenes(planilla)
+            )
+    
+        guardar_nuevas_imagenes(planilla)
+    
+    except Exception as e:
+    
+        print(
+            f"\n[ERROR guardando imágenes]: "
+            f"{type(e).__name__}: {e}"
+        )
+    
     try:
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
