@@ -406,23 +406,43 @@ def es_url_imagen_valida(url):
     
 def extraer_imagen_de_datos(datos):
     """
-    Busca recursivamente una URL de imagen dentro de una respuesta JSON.
+    Extrae una URL de imagen sin hacer ninguna petición adicional.
 
-    Prioriza nombres de campos habituales:
-        imageUrl
-        image_url
-        imageURL
-        image
-        url
+    Para VTEX primero busca en el campo estándar:
+        images -> imageUrl
 
-    No hace ninguna petición adicional.
+    Si no encuentra nada, hace una búsqueda recursiva
+    sobre campos habituales de imagen.
     """
+
+    if not isinstance(datos, (dict, list)):
+        return None
+
+    # ---------------------------------------------------------------
+    # 1. Caso estándar VTEX: images -> imageUrl
+    # ---------------------------------------------------------------
+
+    if isinstance(datos, dict):
+        imagenes = datos.get("images")
+
+        if isinstance(imagenes, list):
+            for imagen in imagenes:
+                if not isinstance(imagen, dict):
+                    continue
+
+                url = imagen.get("imageUrl")
+
+                if es_url_imagen_valida(url):
+                    return url.strip()
+
+    # ---------------------------------------------------------------
+    # 2. Respaldo: búsqueda recursiva
+    # ---------------------------------------------------------------
 
     campos_prioritarios = [
         "imageUrl",
         "image_url",
         "imageURL",
-        "image",
         "imageurl",
         "imageUri",
         "image_uri",
@@ -432,14 +452,13 @@ def extraer_imagen_de_datos(datos):
 
         if isinstance(obj, dict):
 
-            # Primero buscamos campos claramente identificados como imagen.
             for campo in campos_prioritarios:
                 valor = obj.get(campo)
 
-                if isinstance(valor, str) and es_url_imagen_valida(valor):
-                    return valor.strip()
+                if isinstance(valor, str):
+                    if es_url_imagen_valida(valor):
+                        return valor.strip()
 
-            # Después recorremos estructuras anidadas.
             for valor in obj.values():
                 resultado = recorrer(valor)
 
@@ -636,6 +655,22 @@ def buscar_productos_paradineiro(busqueda):
 
                 sin_stock = "SIN STOCK" in li.get_text().upper()
 
+                imagen_url = None
+
+                img_tag = li.select_one("img")
+
+                if img_tag:
+                    imagen_url = (
+                        img_tag.get("src")
+                        or img_tag.get("data-src")
+                        or img_tag.get("data-lazy-src")
+                    )
+
+                    if imagen_url and imagen_url.startswith("//"):
+                        imagen_url = "https:" + imagen_url
+                    elif imagen_url and imagen_url.startswith("/"):
+                        imagen_url = PARADINEIRO_DOMINIO.rstrip("/") + imagen_url
+
                 productos_termino.append(
                     {
                         "sku_id": producto_id,
@@ -646,29 +681,6 @@ def buscar_productos_paradineiro(busqueda):
                         "imageurl": imagen_url,
                     }
                 )
-                imagen_url = None
-
-                img_tag = li.select_one("img")
-                
-                if img_tag:
-                
-                    imagen_url = (
-                        img_tag.get("src")
-                        or img_tag.get("data-src")
-                        or img_tag.get("data-lazy-src")
-                    )
-                
-                    if imagen_url and imagen_url.startswith("//"):
-                        imagen_url = "https:" + imagen_url
-                
-                    elif (
-                        imagen_url
-                        and imagen_url.startswith("/")
-                    ):
-                        imagen_url = (
-                            PARADINEIRO_DOMINIO.rstrip("/")
-                            + imagen_url
-                        )
             CACHE_BUSQUEDA[clave_cache] = productos_termino
             pausa_entre_pedidos()
 
@@ -911,6 +923,45 @@ def registrar_imagen(ean, imageurl, fuente):
     )
 
     return True
+
+def guardar_nuevas_imagenes(planilla):
+    """
+    Guarda en Google Sheets únicamente las imágenes nuevas
+    encontradas durante esta corrida.
+    """
+
+    if not NUEVAS_IMAGENES:
+        print("[IMAGENES] No hay imágenes nuevas para guardar.")
+        return
+
+    try:
+        hoja = planilla.worksheet(NOMBRE_HOJA_IMAGENES)
+    except gspread.exceptions.WorksheetNotFound:
+        hoja = planilla.add_worksheet(
+            title=NOMBRE_HOJA_IMAGENES,
+            rows=2000,
+            cols=3
+        )
+        hoja.append_row(["ean", "imageurl", "fuente"])
+
+    filas = [
+        [
+            item["ean"],
+            item["imageurl"],
+            item["fuente"]
+        ]
+        for item in NUEVAS_IMAGENES
+    ]
+
+    hoja.append_rows(
+        filas,
+        value_input_option="USER_ENTERED"
+    )
+
+    print(
+        f"[IMAGENES] {len(filas)} imágenes nuevas guardadas "
+        f"en '{NOMBRE_HOJA_IMAGENES}'."
+    )
 # -----------------------------------------------------------------------
 # GOOGLE SHEETS
 # -----------------------------------------------------------------------
@@ -1130,21 +1181,21 @@ def main():
 # CARGAR IMÁGENES EXISTENTES
 # -------------------------------------------------------------------
 
-try:
-    creds = obtener_credenciales_google()
-    cliente = gspread.authorize(creds)
-    planilla = cliente.open_by_key(SPREADSHEET_ID)
+    try:
+        creds = obtener_credenciales_google()
+        cliente = gspread.authorize(creds)
+        planilla = cliente.open_by_key(SPREADSHEET_ID)
 
-    CACHE_IMAGENES.update(
-        cargar_cache_imagenes(planilla)
-    )
+        CACHE_IMAGENES.update(
+            cargar_cache_imagenes(planilla)
+        )
 
-except Exception as e:
-    print(
-        f"[AVISO] No se pudo cargar la caché de imágenes: "
-        f"{type(e).__name__}: {e}"
-    )
-    planilla = None
+    except Exception as e:
+        print(
+            f"[AVISO] No se pudo cargar la caché de imágenes: "
+            f"{type(e).__name__}: {e}"
+        )
+        planilla = None
     
     for linea in LINEAS:
         print(f"\n=== Línea: {linea['nombre']} ===")
@@ -1386,12 +1437,6 @@ except Exception as e:
             creds = obtener_credenciales_google()
             cliente = gspread.authorize(creds)
             planilla = cliente.open_by_key(SPREADSHEET_ID)
-    
-        # Si la hoja todavía no existe, la creamos.
-        if not CACHE_IMAGENES:
-            CACHE_IMAGENES.update(
-                cargar_cache_imagenes(planilla)
-            )
     
         guardar_nuevas_imagenes(planilla)
     
