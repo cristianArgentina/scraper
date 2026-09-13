@@ -21,7 +21,8 @@ SPREADSHEET_ID = (
 NOMBRE_HOJA = "Precios_Log_Lineas"
 
 EAN_EXCLUIDOS = {
-    "20092",
+    "20277",
+    "20283",
 }
 
 
