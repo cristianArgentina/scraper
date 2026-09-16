@@ -100,8 +100,59 @@ EAN_EXCLUIDOS = {
     "25066",
     "20279",
     "20092",
-    "20277",
-    "20283",
+}
+
+# -----------------------------------------------------------------------
+# EXCLUSIÓN POR COMERCIO
+#
+# Útil para códigos internos/SKU que un comercio utiliza como EAN.
+# El mismo número puede existir en otro comercio y NO se excluye allí.
+# -----------------------------------------------------------------------
+
+EAN_EXCLUIDOS_POR_COMERCIO = {
+
+
+   "coto": {
+        # "25066",
+    },
+
+    "farmacity": {
+        # "25066",
+    },
+
+    "farmalife": {
+        # "25066",
+    },
+
+    "farmaplus": {
+        "20283",
+        "20277",        
+    },
+
+    "josimar": {
+        # "25066",
+    },
+
+    "carrefour": {
+        # "25066",
+    },
+
+    "diaonline": {
+        # "25066",
+    },
+
+    "masonline": {
+        # "25066",
+    },
+
+    "perfumeriaspigmento": {
+        "25068",
+    },
+
+    "paradineiro": {
+        # "25066",
+    }
+
 }
 
 LINEAS = [
@@ -361,6 +412,35 @@ def parsear_precio_punto(texto: str):
     except ValueError:
         return None
 
+def ean_excluido(ean, sitio):
+    """
+    Determina si un EAN debe excluirse.
+
+    1. Si está en EAN_EXCLUIDOS, se excluye globalmente.
+    2. Si está en EAN_EXCLUIDOS_POR_COMERCIO, se excluye
+       solamente del comercio correspondiente.
+
+    El mismo código puede estar excluido en un comercio
+    y ser válido en otro.
+    """
+
+    ean = str(ean or "").strip()
+    sitio = str(sitio or "").strip().lower()
+
+    if not ean:
+        return False
+
+    # Exclusión global
+    if ean in EAN_EXCLUIDOS:
+        return True
+
+    # Exclusión específica del comercio
+    eans_comercio = EAN_EXCLUIDOS_POR_COMERCIO.get(
+        sitio,
+        set()
+    )
+
+    return ean in eans_comercio
 
 def pasa_filtro_exclusion(nombre: str, excluir: list):
     nombre_str = nombre or ""
@@ -1372,7 +1452,15 @@ def main():
                     "url": prod.get("link", ""),
                     "ean": prod.get("ean"),
                 }
-                if str(prod.get("ean") or "").strip() in EAN_EXCLUIDOS:
+                if ean_excluido(
+                    prod.get("ean"),
+                    sitio["sitio"]
+                ):
+                    print(
+                        f"    [EAN excluido] "
+                        f"{prod.get('ean')} en {sitio['sitio']}: "
+                        f"{prod['nombre']}"
+                    )
                     continue
 
                 if prod.get("ean") and prod.get("imageurl"):
@@ -1430,7 +1518,15 @@ def main():
                     "url": prod["url"],
                     "ean": prod.get("ean"),
                 }
-                if str(prod.get("ean") or "").strip() in EAN_EXCLUIDOS:
+                if ean_excluido(
+                    prod.get("ean"),
+                    "coto"
+                ):
+                    print(
+                        f"    [EAN excluido] "
+                        f"{prod.get('ean')} en coto: "
+                        f"{prod['nombre']}"
+                    )
                     continue
 
                 if prod.get("ean") and prod.get("imageurl"):
@@ -1490,7 +1586,15 @@ def main():
                     "url": prod["url"],
                     "ean": prod.get("ean"), 
                 }
-                if str(prod.get("ean") or "").strip() in EAN_EXCLUIDOS:
+                if ean_excluido(
+                    prod.get("ean"),
+                    "paradineiro"
+                ):
+                    print(
+                        f"    [EAN excluido] "
+                        f"{prod.get('ean')} en paradineiro: "
+                        f"{prod['nombre']}"
+                    )
                     continue
                 if prod.get("ean") and prod.get("imageurl"):
                     registrar_imagen(
