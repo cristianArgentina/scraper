@@ -14,7 +14,6 @@ Uso:
     python3 buscador_precios.py
 """
 
-import csv
 import re
 import time
 import random
@@ -37,9 +36,6 @@ from google.oauth2.service_account import Credentials
 RUTA_CREDENCIALES = "/home/cristian/Descargas/presupuesto-504401-fcb0abb1e8ff.json"
 SPREADSHEET_ID = "1l_2L8rGgCy97uscp-m4mk-0jLLrOA3C9a4ueVGoWB84"
 NOMBRE_HOJA_LOG = "Precios_Log_Lineas"  # pestaña nueva, separada de la anterior
-NOMBRE_HOJA_RESUMEN = (
-    "Resumen_Por_Producto"  # agrupado por EAN, se sobrescribe cada corrida
-)
 NOMBRE_HOJA_IMAGENES = "Imagenes_Productos"
 HEADERS = {
     "User-Agent": (
@@ -1262,133 +1258,6 @@ def escribir_en_google_sheets(filas: list):
         f"'{NOMBRE_HOJA_LOG}' del Google Sheet."
     )
 
-
-def leer_descuentos(planilla):
-    """
-    Lee la pestaña "Descuentos" (columna A: comercio, columna B: % de
-    descuento, ej. "20%") y devuelve un diccionario {sitio: fracción},
-    ej. {"carrefour": 0.20, "farmacity": 0.30, ...}.
-    Si la pestaña no existe o algún valor no se puede leer, ese comercio
-    simplemente queda sin descuento (0%) en vez de romper todo.
-    """
-    try:
-        hoja = planilla.worksheet("Descuentos")
-    except gspread.exceptions.WorksheetNotFound:
-        print(
-            "[AVISO] No encontré la pestaña 'Descuentos', se calcula todo sin descuento por medio de pago."
-        )
-        return {}
-
-    valores = hoja.get_all_values()
-    descuentos = {}
-    for fila in valores[1:]:  # saltea el encabezado
-        if len(fila) < 2 or not fila[0].strip():
-            continue
-        comercio = fila[0].strip().lower()
-        texto_descuento = fila[1].strip().replace("%", "").replace(",", ".")
-        try:
-            descuentos[comercio] = float(texto_descuento) / 100
-        except ValueError:
-            continue
-    return descuentos
-
-
-def construir_resumen_por_producto(filas: list, descuentos: dict):
-    """
-    Agrupa las filas por EAN (mismo producto físico, sin importar cómo lo
-    llame cada sitio) y arma una fila por producto con el precio en cada
-    sitio + cuál es el más barato (precio de sitio, sin descuento por
-    medio de pago) y cuál es el más barato aplicando el descuento propio
-    de cada comercio (columna "Descuentos" del Excel). Los productos sin
-    EAN quedan afuera del resumen (siguen estando en el log detallado).
-    """
-    sitios_todos = [s["sitio"] for s in SITIOS_VTEX] + ["coto", "paradineiro"]
-
-    productos = {}  # ean -> {"linea":, "producto":, "precios": {sitio: precio}}
-    for f in filas:
-        ean = f.get("ean")
-        if not ean or f.get("precio") is None:
-            continue
-        ean = str(ean)
-        if ean not in productos:
-            productos[ean] = {
-                "linea": f["linea"],
-                "producto": f["producto"],
-                "precios": {},
-            }
-        if len(f["producto"] or "") > len(productos[ean]["producto"] or ""):
-            productos[ean]["producto"] = f["producto"]
-        precio_actual = productos[ean]["precios"].get(f["sitio"])
-        if precio_actual is None or f["precio"] < precio_actual:
-            productos[ean]["precios"][f["sitio"]] = f["precio"]
-
-    filas_resumen = []
-    for ean, info in productos.items():
-        precios = info["precios"]
-        mejor_sitio = min(precios, key=precios.get)
-
-        # Precio con descuento por medio de pago aplicado a cada sitio
-        precios_con_descuento = {
-            sitio: precio * (1 - descuentos.get(sitio, 0))
-            for sitio, precio in precios.items()
-        }
-        mejor_sitio_cd = min(precios_con_descuento, key=precios_con_descuento.get)
-
-        fila_resumen = {
-            "linea": info["linea"],
-            "producto": info["producto"],
-            "ean": ean,
-            "mejor_precio": precios[mejor_sitio],
-            "mejor_sitio": mejor_sitio,
-            "mejor_precio_cd": round(precios_con_descuento[mejor_sitio_cd], 2),
-            "mejor_lugar_cd": mejor_sitio_cd,
-        }
-        for sitio in sitios_todos:
-            fila_resumen[sitio] = precios.get(sitio)
-        filas_resumen.append(fila_resumen)
-
-    return filas_resumen, sitios_todos
-
-
-def escribir_resumen_en_google_sheets(filas_resumen: list, sitios_todos: list):
-    """
-    Escribe el resumen agrupado por producto en una pestaña NUEVA por
-    cada corrida (con fecha y hora en el nombre), para tener historial
-    en vez de pisar el resumen anterior.
-    """
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ]
-    creds = obtener_credenciales_google()
-    cliente = gspread.authorize(creds)
-    planilla = cliente.open_by_key(SPREADSHEET_ID)
-
-    sufijo_fecha = datetime.now(ZONA_HORARIA).strftime("%Y-%m-%d_%H%M")
-    nombre_hoja = f"{NOMBRE_HOJA_RESUMEN}_{sufijo_fecha}"
-    hoja = planilla.add_worksheet(
-        title=nombre_hoja, rows=len(filas_resumen) + 5, cols=20
-    )
-
-    encabezado = [
-        "linea",
-        "producto",
-        "ean",
-        "mejor_precio",
-        "mejor_sitio",
-        "mejor_precio_cd",
-        "mejor_lugar_cd",
-    ] + sitios_todos
-    filas_para_subir = [encabezado]
-    for f in filas_resumen:
-        filas_para_subir.append([f.get(col) for col in encabezado])
-
-    hoja.update(filas_para_subir, value_input_option="USER_ENTERED")
-    print(
-        f"{len(filas_resumen)} productos agrupados subidos a la pestaña nueva '{nombre_hoja}'."
-    )
-
-
 # -----------------------------------------------------------------------
 # MAIN
 # -----------------------------------------------------------------------
@@ -1645,28 +1514,6 @@ def main():
 
         pausa_entre_pedidos()
 
-    nombre_archivo = (
-        f"precios_lineas_{datetime.now(ZONA_HORARIA).strftime('%Y%m%d_%H%M')}.csv"
-    )
-    with open(nombre_archivo, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(
-            f,
-            fieldnames=[
-                "fecha",
-                "linea",
-                "producto",
-                "sitio",
-                "precio",
-                "disponibilidad",
-                "error",
-                "url",
-                "ean",
-            ],
-        )
-        writer.writeheader()
-        writer.writerows(filas)
-    print(f"\nGuardado localmente en {nombre_archivo}")
-
     try:
         escribir_en_google_sheets(filas)
     except Exception as e:
@@ -1685,21 +1532,6 @@ def main():
 
         print(f"\n[ERROR guardando imágenes]: " f"{type(e).__name__}: {e}")
 
-    try:
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive",
-        ]
-        creds = obtener_credenciales_google()
-        cliente = gspread.authorize(creds)
-        planilla = cliente.open_by_key(SPREADSHEET_ID)
-        descuentos = leer_descuentos(planilla)
-
-        filas_resumen, sitios_todos = construir_resumen_por_producto(filas, descuentos)
-        escribir_resumen_en_google_sheets(filas_resumen, sitios_todos)
-    except Exception as e:
-        print(f"\n[ERROR subiendo el resumen agrupado]: {type(e).__name__}: {e}")
-
-
+    
 if __name__ == "__main__":
     main()
