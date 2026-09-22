@@ -126,6 +126,12 @@ EAN_EXCLUIDOS = {
     "7791293046006",
     "7791293046020",
     "7791293046419",
+    "7791293051475",
+    "7791293051451",
+    "7791293051420",
+    "7791293049779",    
+    "7791293049748",
+    "7791293052199",    
 }
 
 # -----------------------------------------------------------------------
@@ -671,7 +677,7 @@ def buscar_productos_coto(busqueda):
     antes en esta corrida."""
     params = {
         "key": COTO_SEARCH_KEY,
-        "num_results_per_page": 24,
+        "num_results_per_page": 96,
         "pre_filter_expression": '{"name":"store_availability","value":"200"}',
         "c": "cio-fe-web-coto-4.1.0",
     }
