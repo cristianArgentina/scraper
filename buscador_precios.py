@@ -86,7 +86,7 @@ EXCLUIR_GLOBAL = [
 
 EAN_EXCLUIDOS = {
     "7509552859133",
-    "7891150104822", 
+    "7891150104822",
     "7898587774901",
     "7791293051024",
     "650240077111",
@@ -100,6 +100,36 @@ EAN_EXCLUIDOS = {
     "25066",
     "20279",
     "20092",
+
+    # Sedal - excluir por el momento
+    "7791293045795",
+    "7791293045801",
+    "7791293046389",
+    "7791293045993",
+    "7791293045986",
+    "7791293045658",
+    "7791293045818",
+    "7791293045825",
+    "7791293049724",
+    "7791293045832",
+    "7791293051444",
+    "7791293046440",
+    "7791293052205",
+    "7791293045887",
+    "7791293045689",
+    "7791293046426",
+    "7791293045863",
+    "7791293045665",
+    "7791293046365",
+    "7791293045696",
+    "7791293045856",
+    "7791293045870",
+    "7791293045672",
+    "7791293045894",
+    "7791293046013",
+    "7791293046006",
+    "7791293046020",
+    "7791293046419",
 }
 
 # -----------------------------------------------------------------------
@@ -225,6 +255,12 @@ LINEAS = [
         "nombre": "Nivea Creme 150",
         "busqueda": "nivea-creme-150",
         "incluir": [r"(?=.*creme)(?=.*150)"],
+        "excluir": [],
+    },
+    {
+        "nombre": "Sedal",
+        "busqueda": "sedal",
+        "incluir": ["sedal"],
         "excluir": [],
     },
     {
@@ -1418,6 +1454,13 @@ def main():
                 if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
                     print(f"    [filtrado por 'excluir'] {prod['nombre']}")
                     continue
+                if ean_excluido(prod.get("ean"), sitio["sitio"]):
+                    print(
+                        f"    [EAN excluido] "
+                        f"{prod.get('ean')} en {sitio['sitio']}: "
+                        f"{prod['nombre']}"
+                    )
+                    continue
                 if sitio["metodo_precio"] == "css" and prod["link"]:
                     resultado = obtener_precio_css(prod["link"])
                 else:
@@ -1452,16 +1495,6 @@ def main():
                     "url": prod.get("link", ""),
                     "ean": prod.get("ean"),
                 }
-                if ean_excluido(
-                    prod.get("ean"),
-                    sitio["sitio"]
-                ):
-                    print(
-                        f"    [EAN excluido] "
-                        f"{prod.get('ean')} en {sitio['sitio']}: "
-                        f"{prod['nombre']}"
-                    )
-                    continue
 
                 if prod.get("ean") and prod.get("imageurl"):
                     registrar_imagen(prod["ean"], prod["imageurl"], sitio["sitio"])
@@ -1507,6 +1540,13 @@ def main():
                 if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
                     print(f"    [filtrado por 'excluir'] {prod['nombre']}")
                     continue
+                if ean_excluido(prod.get("ean"), sitio["sitio"]):
+                    print(
+                        f"    [EAN excluido] "
+                        f"{prod.get('ean')} en {sitio['sitio']}: "
+                        f"{prod['nombre']}"
+                    )
+                    continue
                 fila = {
                     "fecha": fecha,
                     "linea": linea["nombre"],
@@ -1518,16 +1558,6 @@ def main():
                     "url": prod["url"],
                     "ean": prod.get("ean"),
                 }
-                if ean_excluido(
-                    prod.get("ean"),
-                    "coto"
-                ):
-                    print(
-                        f"    [EAN excluido] "
-                        f"{prod.get('ean')} en coto: "
-                        f"{prod['nombre']}"
-                    )
-                    continue
 
                 if prod.get("ean") and prod.get("imageurl"):
                     registrar_imagen(prod["ean"], prod["imageurl"], "coto")
@@ -1575,6 +1605,13 @@ def main():
                 if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
                     print(f"    [filtrado por 'excluir'] {prod['nombre']}")
                     continue
+                if ean_excluido(prod.get("ean"), sitio["sitio"]):
+                    print(
+                        f"    [EAN excluido] "
+                        f"{prod.get('ean')} en {sitio['sitio']}: "
+                        f"{prod['nombre']}"
+                    )
+                    continue
                 fila = {
                     "fecha": fecha,
                     "linea": linea["nombre"],
@@ -1586,16 +1623,7 @@ def main():
                     "url": prod["url"],
                     "ean": prod.get("ean"), 
                 }
-                if ean_excluido(
-                    prod.get("ean"),
-                    "paradineiro"
-                ):
-                    print(
-                        f"    [EAN excluido] "
-                        f"{prod.get('ean')} en paradineiro: "
-                        f"{prod['nombre']}"
-                    )
-                    continue
+
                 if prod.get("ean") and prod.get("imageurl"):
                     registrar_imagen(
                         prod["ean"],
