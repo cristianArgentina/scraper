@@ -1,5 +1,6 @@
 import csv
 import os
+import re
 from datetime import datetime
 
 import gspread
@@ -20,44 +21,25 @@ SPREADSHEET_ID = (
 
 NOMBRE_HOJA = "Precios_Log_Lineas"
 
-EAN_EXCLUIDOS = {
-    "7791293043623",
-    "7791293043593",
-    "7791293043432",
-    "7791293047683",
-    "7791293047690",
-    "7791293047713",
-    "7791293047720",
-    "7791293047775",    
-    "7791293047782",    
-    "7791293047805",    
-    "7791293047843",    
-    "7791293047744",    
-    "7791293046471",    
-    "7791293052243",    
-    "7791293052267",    
-    "7791293030609",    
-    "7791293043319",    
-    "7791293030555",    
-    "7791293030586",    
-    "7791293030630",    
-    "7791293043500",    
-    "7791293043470",    
-    "7791293043494",    
-    "7791293042060",    
-    "7791293042039",    
-    "7791293042008",    
-    "7791293041971",    
-    "7791293043487",    
-    "7791293046396",    
-    "7791293046457",    
-    "7791293049755",    
-    "7791293046457",    
-    "7791293046457",    
-    "7791293046457",    
-    "7791293046457",    
-    "7791293046457",
-}
+# Patrones de disponibilidad que se consideran "sin stock".
+# Se comparan en minúsculas, así que no importan mayúsculas/minúsculas.
+# startswith cubre tanto "withoutStock" como
+# "withoutStock (verificado en HTML)" con un solo patrón.
+PATRONES_SIN_STOCK = [
+    "withoutstock",
+    "sin_stock",
+]
+
+
+# ============================================================
+# UTILIDAD
+# ============================================================
+
+def es_disponibilidad_sin_stock(valor: str) -> bool:
+    valor = (valor or "").strip().lower()
+    if not valor:
+        return False
+    return any(valor.startswith(patron) for patron in PATRONES_SIN_STOCK)
 
 
 # ============================================================
@@ -97,13 +79,13 @@ def obtener_credenciales():
 def main():
 
     print("\n==========================================")
-    print(" LIMPIEZA DE HISTÓRICO DE PRECIOS")
+    print(" LIMPIEZA DE HISTÓRICO DE PRECIOS SIN STOCK")
     print("==========================================\n")
 
-    print("EAN que serán eliminados:")
+    print("Patrones de disponibilidad que se eliminarán:")
 
-    for ean in sorted(EAN_EXCLUIDOS):
-        print(f"  - {ean}")
+    for patron in PATRONES_SIN_STOCK:
+        print(f"  - {patron}*")
 
     print()
 
@@ -131,13 +113,18 @@ def main():
         for valor in valores[0]
     ]
 
-    if "ean" not in encabezados:
-        print("\nERROR: no encontré la columna 'ean'.")
+    if "disponibilidad" not in encabezados:
+        print("\nERROR: no encontré la columna 'disponibilidad'.")
         print("Encabezados encontrados:")
         print(encabezados)
         return
 
-    indice_ean = encabezados.index("ean")
+    indice_disponibilidad = encabezados.index("disponibilidad")
+
+    # Columnas opcionales, solo para mostrar mejor el resumen.
+    indice_linea = encabezados.index("linea") if "linea" in encabezados else None
+    indice_producto = encabezados.index("producto") if "producto" in encabezados else None
+    indice_sitio = encabezados.index("sitio") if "sitio" in encabezados else None
 
     filas_a_eliminar = []
     filas_a_guardar_backup = []
@@ -148,14 +135,12 @@ def main():
 
     for numero_fila, fila in enumerate(valores[1:], start=2):
 
-        if len(fila) <= indice_ean:
+        if len(fila) <= indice_disponibilidad:
             continue
 
-        ean = str(
-            fila[indice_ean]
-        ).strip()
+        disponibilidad = fila[indice_disponibilidad]
 
-        if ean in EAN_EXCLUIDOS:
+        if es_disponibilidad_sin_stock(disponibilidad):
 
             filas_a_eliminar.append(numero_fila)
             filas_a_guardar_backup.append(fila)
@@ -171,27 +156,71 @@ def main():
 
     if not filas_a_eliminar:
 
-        print("\nNo hay filas con esos EAN.")
+        print("\nNo hay filas sin stock para eliminar.")
         return
 
-    # Mostrar distribución
-    cantidades = {}
+    # Mostrar distribución por sitio (si existe la columna)
+    if indice_sitio is not None:
+
+        cantidades_sitio = {}
+
+        for fila in filas_a_guardar_backup:
+
+            sitio = (
+                fila[indice_sitio]
+                if len(fila) > indice_sitio
+                else "(sin sitio)"
+            ).strip() or "(sin sitio)"
+
+            cantidades_sitio[sitio] = cantidades_sitio.get(sitio, 0) + 1
+
+        print("\nDistribución por sitio:")
+
+        for sitio in sorted(cantidades_sitio):
+            print(f"  {sitio}: {cantidades_sitio[sitio]} filas")
+
+    # Mostrar distribución por valor exacto de disponibilidad
+    cantidades_disp = {}
 
     for fila in filas_a_guardar_backup:
 
-        ean = str(
-            fila[indice_ean]
-        ).strip()
+        disp = (
+            fila[indice_disponibilidad]
+            if len(fila) > indice_disponibilidad
+            else ""
+        ).strip() or "(vacío)"
 
-        cantidades[ean] = cantidades.get(ean, 0) + 1
+        cantidades_disp[disp] = cantidades_disp.get(disp, 0) + 1
 
-    print("\nDistribución:")
+    print("\nDistribución por valor de disponibilidad:")
 
-    for ean in sorted(cantidades):
-        print(
-            f"  {ean}: "
-            f"{cantidades[ean]} filas"
+    for disp in sorted(cantidades_disp):
+        print(f"  '{disp}': {cantidades_disp[disp]} filas")
+
+    # Mostrar algunos ejemplos de producto/sitio para verificar a ojo
+    print("\nEjemplos (hasta 10):")
+
+    for fila in filas_a_guardar_backup[:10]:
+
+        producto = (
+            fila[indice_producto]
+            if indice_producto is not None and len(fila) > indice_producto
+            else "(sin producto)"
         )
+
+        sitio = (
+            fila[indice_sitio]
+            if indice_sitio is not None and len(fila) > indice_sitio
+            else "(sin sitio)"
+        )
+
+        disp = (
+            fila[indice_disponibilidad]
+            if len(fila) > indice_disponibilidad
+            else ""
+        )
+
+        print(f"  [{sitio}] {producto} -> '{disp}'")
 
     # --------------------------------------------------------
     # Backup local
@@ -202,7 +231,7 @@ def main():
     )
 
     nombre_backup = (
-        f"backup_filas_eliminadas_{fecha_backup}.csv"
+        f"backup_filas_sin_stock_{fecha_backup}.csv"
     )
 
     with open(
