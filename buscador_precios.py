@@ -1014,6 +1014,19 @@ def buscar_productos_paradineiro(busqueda):
 
 
 # -----------------------------------------------------------------------
+# CHEQUEO DE DISPONIBILIDAD (sitios VTEX)
+# -----------------------------------------------------------------------
+def disponibilidad_indica_sin_stock(disponibilidad):
+    """
+    True si el string de disponibilidad indica que el producto
+    no tiene stock real, sin importar si vino acompañado de un
+    precio (rescatado por el fallback CSS, promos, etc).
+    """
+    if not disponibilidad:
+        return False
+    return disponibilidad.strip().lower().startswith("withoutstock")
+
+# -----------------------------------------------------------------------
 # OBTENCIÓN DE PRECIO FINAL (sitios VTEX)
 # -----------------------------------------------------------------------
 def obtener_precio_css(url: str):
@@ -1440,6 +1453,12 @@ def main():
                     )
                     pausa_entre_pedidos()
                     continue
+                if disponibilidad_indica_sin_stock(fila["disponibilidad"]):
+                    print(
+                        f"    [sin stock, descartado] {fila['producto']} ({fila['disponibilidad']})"
+                    )
+                    pausa_entre_pedidos()
+                    continue                
                 filas.append(fila)
                 print(
                     f"    -> {fila['producto']}: {fila['precio']} ({fila['disponibilidad']})"
