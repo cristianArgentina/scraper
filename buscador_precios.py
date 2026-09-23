@@ -1481,8 +1481,11 @@ def main():
                     "ean": prod.get("ean"),
                 }
 
-                if prod.get("ean") and prod.get("imageurl"):
-                    registrar_imagen(prod["ean"], prod["imageurl"], sitio["sitio"])
+                # -------------------------------------------------------
+                # DESCARTES: primero se descarta, recién después (si el
+                # producto sobrevivió) se registra su imagen. Así no se
+                # guardan imágenes de productos sin precio ni sin stock.
+                # -------------------------------------------------------
                 if fila["precio"] is None:
                     print(
                         f"    [sin precio, descartado] {fila['producto']} ({fila['disponibilidad']})"
@@ -1494,7 +1497,11 @@ def main():
                         f"    [sin stock, descartado] {fila['producto']} ({fila['disponibilidad']})"
                     )
                     pausa_entre_pedidos()
-                    continue                
+                    continue
+
+                if prod.get("ean") and prod.get("imageurl"):
+                    registrar_imagen(prod["ean"], prod["imageurl"], sitio["sitio"])
+
                 filas.append(fila)
                 print(
                     f"    -> {fila['producto']}: {fila['precio']} ({fila['disponibilidad']})"
@@ -1550,13 +1557,15 @@ def main():
                     "ean": prod.get("ean"),
                 }
 
-                if prod.get("ean") and prod.get("imageurl"):
-                    registrar_imagen(prod["ean"], prod["imageurl"], "coto")
                 if fila["precio"] is None:
                     print(
                         f"    [sin precio, descartado] {fila['producto']} ({fila['disponibilidad']})"
                     )
                     continue
+
+                if prod.get("ean") and prod.get("imageurl"):
+                    registrar_imagen(prod["ean"], prod["imageurl"], "coto")
+
                 filas.append(fila)
                 print(
                     f"    -> {fila['producto']}: {fila['precio']} ({fila['disponibilidad']})"
@@ -1615,12 +1624,6 @@ def main():
                     "ean": prod.get("ean"), 
                 }
 
-                if prod.get("ean") and prod.get("imageurl"):
-                    registrar_imagen(
-                        prod["ean"],
-                        prod["imageurl"],
-                        "paradineiro"
-                    )
                 if fila["precio"] is None:
                     print(
                         f"    [sin precio, descartado] {fila['producto']} ({fila['disponibilidad']})"
@@ -1629,6 +1632,14 @@ def main():
                 if fila["disponibilidad"] == "sin_stock":
                     print(f"    [sin stock, descartado] {fila['producto']}")
                     continue
+
+                if prod.get("ean") and prod.get("imageurl"):
+                    registrar_imagen(
+                        prod["ean"],
+                        prod["imageurl"],
+                        "paradineiro"
+                    )
+
                 filas.append(fila)
                 print(
                     f"    -> {fila['producto']}: {fila['precio']} ({fila['disponibilidad']})"
