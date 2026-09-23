@@ -1024,6 +1024,18 @@ def obtener_precio_css(url: str):
         return {"error": f"error de conexión: {e}"}
 
     soup = BeautifulSoup(resp.text, "html.parser")
+    
+    
+    # Chequeo de disponibilidad real: en Carrefour, este span aparece
+    # con el texto "No Disponible" cuando el botón de compra está
+    # deshabilitado, independientemente de que el precio siga
+    # renderizado en la página.
+    boton_no_disponible = soup.select_one(
+        "span[class*='incompatible-cart'][class*='buttonContentText']"
+    )
+    if boton_no_disponible and "no disponible" in boton_no_disponible.get_text(strip=True).lower():
+        return {"precio": None, "disponibilidad": "sin_stock"}
+    
     contenedor = soup.select_one(".vtex-product-price-1-x-sellingPrice")
     if contenedor is None:
         return {"error": "no se encontró el contenedor de precio"}
@@ -1072,7 +1084,7 @@ def obtener_precio_simulacion_promo_2u(
         cantidad = item.get("quantity", 1)
         if precio_venta is None:
             if disponible == "withoutStock":
-                return {"precio": None, "disponibilidad": "sin_stock"}
+                return {"precio": None, "disponibilidad": "withoutStock"}
             return {"error": "no vino sellingPrice en alguno de los items"}
         total_centavos += precio_venta * cantidad
         total_unidades += cantidad
