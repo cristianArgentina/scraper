@@ -389,6 +389,8 @@ COTO_SEARCH_KEY = "key_r6xzz4IAoTWcipni"
 PARADINEIRO_SEARCH_URL = "https://www.paradineirofarmacias.com.ar/shop"
 PARADINEIRO_DOMINIO = "https://www.paradineirofarmacias.com.ar"
 
+PRODUCTOS_POR_PAGINA_VTEX = 40
+MAX_PAGINAS_VTEX = 3
 
 def request_con_reintentos(metodo: str, url: str, max_intentos: int = 3, **kwargs):
     """
@@ -620,49 +622,96 @@ def extraer_imagen_de_datos(datos):
 # -----------------------------------------------------------------------
 # DESCUBRIMIENTO DE PRODUCTOS
 # -----------------------------------------------------------------------
-def buscar_productos_vtex(dominio: str, busqueda):
-    """Busca una línea de producto (uno o varios términos) en un sitio
-    VTEX y devuelve la lista de productos encontrados con nombre, skuId
-    y link, sin duplicados (por skuId) si varios términos traen el mismo
-    producto. Usa CACHE_BUSQUEDA para no repetir un mismo término al
-    mismo sitio si ya se pidió antes en esta corrida."""
+def buscar_productos_vtex(dominio, busqueda):
+    """
+    Busca una línea de producto en VTEX y devuelve la lista de productos
+    encontrados con nombre, skuId, link, EAN e imagen.
+
+    Utiliza paginación:
+      - hasta 40 productos por página
+      - máximo 3 páginas
+      - continúa a la siguiente página solamente si la anterior
+        devolvió exactamente 40 productos.
+
+    Usa CACHE_BUSQUEDA para no repetir un mismo término
+    en el mismo sitio durante esta corrida.
+    """
     productos_por_sku = {}
+
     for termino in normalizar_terminos(busqueda):
         clave_cache = ("vtex", dominio, termino)
+
         if clave_cache in CACHE_BUSQUEDA:
             productos_termino = CACHE_BUSQUEDA[clave_cache]
+
         else:
-            url = f"https://{dominio}/api/catalog_system/pub/products/search/{termino}"
-            try:
-                resp = request_con_reintentos("GET", url, headers=HEADERS)
-                resp.raise_for_status()
-                data = resp.json()
-            except Exception as e:
-                return None, f"error de búsqueda ('{termino}'): {e}"
-
             productos_termino = []
-            for p in data:
-                items = p.get("items", [])
-                if not items:
-                    continue
-                item = items[0]
 
-                productos_termino.append(
-                    {
-                        "nombre": p.get("productName", ""),
-                        "sku_id": item.get("itemId"),
-                        "link": p.get("link"),
-                        "ean": item.get("ean"),
-                        "imageurl": extraer_imagen_de_datos(item),
-                    }
+            for pagina in range(MAX_PAGINAS_VTEX):
+                desde = pagina * PRODUCTOS_POR_PAGINA_VTEX
+                hasta = desde + PRODUCTOS_POR_PAGINA_VTEX - 1
+
+                url = (
+                    f"https://{dominio}/api/catalog_system/pub/products/search/"
+                    f"{termino}"
+                    f"?_from={desde}&_to={hasta}"
                 )
 
+                try:
+                    resp = request_con_reintentos(
+                        "GET",
+                        url,
+                        headers=HEADERS
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+
+                except Exception as e:
+                    return None, (
+                        f"error de búsqueda ('{termino}', "
+                        f"página {pagina + 1}): {e}"
+                    )
+
+                print(
+                    f"    [VTEX] {termino} → página {pagina + 1}: "
+                    f"{len(data)} productos"
+                )
+
+                for p in data:
+                    items = p.get("items", [])
+
+                    if not items:
+                        continue
+
+                    item = items[0]
+
+                    productos_termino.append(
+                        {
+                            "nombre": p.get("productName", ""),
+                            "sku_id": item.get("itemId"),
+                            "link": p.get("link"),
+                            "ean": item.get("ean"),
+                            "imageurl": extraer_imagen_de_datos(item),
+                        }
+                    )
+
+                # Si vinieron menos de 40, ya no hay otra página.
+                if len(data) < PRODUCTOS_POR_PAGINA_VTEX:
+                    break
+
+                # Evita hacer consultas consecutivas demasiado rápido.
+                pausa_entre_pedidos()
+
             CACHE_BUSQUEDA[clave_cache] = productos_termino
+
+            # Mantener la pausa que ya tenía el buscador
+            # después de completar el término.
             pausa_entre_pedidos()
 
         for prod in productos_termino:
             if prod["sku_id"] in productos_por_sku:
                 continue
+
             productos_por_sku[prod["sku_id"]] = prod
 
     return list(productos_por_sku.values()), None
