@@ -233,12 +233,29 @@ EAN_EXCLUIDOS_POR_COMERCIO = {
 
 }
 
+# -----------------------------------------------------------------------
+# EXCLUSIÓN POR SKU (para comercios sin EAN, como Maxiconsumo).
+# Mismo criterio que EAN_EXCLUIDOS_POR_COMERCIO pero usando el SKU
+# interno del sitio en vez del EAN, ya que Maxiconsumo no expone EAN
+# en el listado de búsqueda.
+# -----------------------------------------------------------------------
+SKU_EXCLUIDOS_POR_COMERCIO = {
+    "maxiconsumo": {
+        # ej: "25996",
+    },
+}
+
 LINEAS = [
     {
         "nombre": "Dove Bond Repair",
         "busqueda": "dove-bond-repair",
         "busqueda_por_sitio": {"perfumeriaspigmento": "bond-repair"},
         "incluir": ["bond"],
+        # SKU 22781 en Maxiconsumo: "ACONDICIONADOR DOVE REPAIR 250 ML".
+        # El nombre no dice "bond" pero es el producto de la línea Bond
+        # Repair (nombre incompleto/mal cargado de ese lado). Se fuerza
+        # la inclusión puntual sin aflojar el filtro para el resto.
+        "incluir_sku_por_sitio": {"maxiconsumo": {"22781"}},
         "excluir": [r"200\s*(ml|cc)", r"193\s*(ml|cc)", r"385\s*(ml|cc)"],
     },
     {
@@ -309,7 +326,10 @@ LINEAS = [
         "nombre": "Sedal",
         "busqueda": "sedal",
         "incluir": ["sedal"],
-        "excluir": [],
+        # 650ml y 190ml existen como presentaciones de Sedal y no se
+        # quieren (confirmado). El resto de tamaños (300ml, 340ml, etc.)
+        # sí quedan.
+        "excluir": [r"650\s*(ml|cc)", r"190\s*(ml|cc)"],
     },
     {
         "nombre": "Cicatricure Gel 60",
@@ -438,6 +458,40 @@ PARADINEIRO_DOMINIO = "https://www.paradineirofarmacias.com.ar"
 PRODUCTOS_POR_PAGINA_VTEX = 40
 MAX_PAGINAS_VTEX = 3
 
+# -----------------------------------------------------------------------
+# SITIOS MAGENTO (Maxiconsumo, y cualquier otro sitio Magento que se
+# sume más adelante).
+#
+# A diferencia de VTEX, acá el precio final ya viene calculado en el
+# HTML del listado de búsqueda (no hace falta simular checkout). Cada
+# producto trae dos precios: "unitario por bulto cerrado" (con
+# descuento, pero exige comprar el pack/caja cerrada) y "unitario"
+# suelto (más caro). Se guarda el de bulto cerrado como precio final,
+# con la misma lógica que las promos 2x1 en VTEX: el mejor precio
+# disponible.
+#
+# OJO: la ruta /catalogsearch/result/ de Maxiconsumo da error 500 si se
+# le manda el parámetro product_list_limit (probado). Sin ese parámetro
+# trae 12 productos por página; se pagina con &p=2, &p=3, etc.
+#
+# Maxiconsumo NO expone EAN en el listado de búsqueda (se revisó el
+# HTML completo: no hay ean/gtin/barcode/upc ni datos estructurados
+# schema.org/Product). Por eso estos productos se guardan con
+# "ean": None y se identifica cada producto por su SKU interno de
+# Magento en la columna "sku" de la hoja.
+# -----------------------------------------------------------------------
+SITIOS_MAGENTO = [
+    {
+        "sitio": "maxiconsumo",
+        "dominio": "www.maxiconsumo.com",
+        "sucursal": "sucursal_villa_dominico",
+    },
+]
+
+MAX_PAGINAS_MAGENTO = 5  # 5 páginas x 12 = hasta 60 productos por término
+PRODUCTOS_POR_PAGINA_MAGENTO = 12  # tamaño de página fijo de Maxiconsumo
+
+
 def request_con_reintentos(metodo: str, url: str, max_intentos: int = 3, **kwargs):
     """
     Hace un request con reintentos y backoff exponencial si el sitio
@@ -528,6 +582,22 @@ def ean_excluido(ean, sitio):
 
     return ean in eans_comercio
 
+
+def sku_excluido(sku, sitio):
+    """
+    Igual que ean_excluido(), pero para comercios que no exponen EAN
+    (por ahora, Maxiconsumo) y usan el SKU interno como identificador.
+    """
+    sku = str(sku or "").strip()
+    sitio = str(sitio or "").strip().lower()
+
+    if not sku:
+        return False
+
+    skus_comercio = SKU_EXCLUIDOS_POR_COMERCIO.get(sitio, set())
+
+    return sku in skus_comercio
+
 def pasa_filtro_exclusion(nombre: str, excluir: list):
     nombre_str = nombre or ""
     todos_los_patrones = list(excluir) + EXCLUIR_GLOBAL
@@ -541,6 +611,38 @@ def pasa_filtro_inclusion(nombre: str, incluir: list):
         return True
     nombre_str = nombre or ""
     return any(re.search(patron, nombre_str, re.IGNORECASE) for patron in incluir)
+
+
+def incluido_por_sku_forzado(sku, sitio: str, linea: dict):
+    """
+    Permite forzar la inclusión de un producto puntual (por SKU/sku_id
+    del sitio) aunque su nombre no pase el filtro 'incluir' de la
+    línea. Útil para casos donde el nombre del producto en un comercio
+    en particular está incompleto/mal cargado y no menciona la palabra
+    clave de la línea (ej. un "ACONDICIONADOR DOVE REPAIR 250 ML" en
+    Maxiconsumo que en realidad SÍ es de la línea Bond Repair, pero no
+    lo dice en el nombre).
+
+    Se configura en LINEAS con la clave opcional "incluir_sku_por_sitio":
+        "incluir_sku_por_sitio": {
+            "maxiconsumo": {"22781"},
+            "coto": {"123456"},
+        }
+
+    OJO: esto NO bypassea el filtro 'excluir' (tamaños, etc.) ni
+    EAN_EXCLUIDOS/SKU_EXCLUIDOS_POR_COMERCIO — solo el filtro 'incluir'
+    por nombre. Si un SKU forzado igual cae en una exclusión, se sigue
+    descartando (hay que sacarlo de la exclusión correspondiente si de
+    verdad se lo quiere).
+    """
+    sku = str(sku or "").strip()
+    sitio = str(sitio or "").strip().lower()
+
+    if not sku:
+        return False
+
+    forzados = linea.get("incluir_sku_por_sitio", {}).get(sitio, set())
+    return sku in {str(s) for s in forzados}
 
 
 def normalizar_terminos(busqueda):
@@ -1060,6 +1162,176 @@ def buscar_productos_paradineiro(busqueda):
 
 
 # -----------------------------------------------------------------------
+# MAGENTO (Maxiconsumo)
+# -----------------------------------------------------------------------
+
+# Sesión global reutilizada entre búsquedas, para no tener que pedir
+# cookies de nuevo en cada llamada. Se inicializa la primera vez que se
+# necesita (una por dominio, por si en el futuro se suma otro sitio
+# Magento).
+_SESIONES_MAGENTO = {}
+
+
+def obtener_sesion_magento(dominio: str, sucursal: str):
+    if dominio in _SESIONES_MAGENTO:
+        return _SESIONES_MAGENTO[dominio]
+
+    sesion = requests.Session()
+    try:
+        sesion.get(f"https://{dominio}/{sucursal}/", headers=HEADERS, timeout=20)
+    except requests.RequestException as e:
+        print(f"    [AVISO] no se pudo precargar cookies de {dominio}: {e}")
+
+    _SESIONES_MAGENTO[dominio] = sesion
+    return sesion
+
+
+def buscar_productos_magento(dominio: str, sucursal: str, busqueda):
+    """
+    Busca una línea de producto en un sitio Magento (Maxiconsumo) usando
+    el buscador nativo (/catalogsearch/result/). El precio final
+    guardado es el de "bulto cerrado" (con descuento), no el unitario
+    suelto.
+
+    IMPORTANTE: no usar el parámetro product_list_limit en esta ruta,
+    rompe el sitio (da 500 - probado). Sin ese parámetro trae 12
+    productos por página; paginamos con &p=N.
+
+    No devuelve EAN (Maxiconsumo no lo expone en el listado de
+    búsqueda): queda en None y el producto se identifica por su SKU
+    interno de Magento.
+    """
+    productos_por_sku = {}
+
+    sesion = obtener_sesion_magento(dominio, sucursal)
+
+    for termino in normalizar_terminos(busqueda):
+        clave_cache = ("magento", dominio, termino)
+
+        if clave_cache in CACHE_BUSQUEDA:
+            productos_termino = CACHE_BUSQUEDA[clave_cache]
+        else:
+            productos_termino = []
+            termino_url = termino.replace(" ", "+")
+
+            for pagina in range(1, MAX_PAGINAS_MAGENTO + 1):
+                sufijo_pagina = f"&p={pagina}" if pagina > 1 else ""
+                url = (
+                    f"https://{dominio}/{sucursal}/catalogsearch/result/"
+                    f"?q={termino_url}{sufijo_pagina}"
+                )
+
+                try:
+                    resp = request_con_reintentos(
+                        "GET", url, headers=HEADERS, cookies=sesion.cookies
+                    )
+                    resp.raise_for_status()
+                except Exception as e:
+                    return None, (
+                        f"error de búsqueda ('{termino}', página {pagina}): {e}"
+                    )
+
+                soup = BeautifulSoup(resp.text, "html.parser")
+                items = soup.select("li.product-item")
+
+                if not items:
+                    break
+
+                print(
+                    f"    [Magento] {termino} → página {pagina}: "
+                    f"{len(items)} productos"
+                )
+
+                for li in items:
+                    a_tag = (
+                        li.find("a", class_="product-item-link")
+                        or li.find("a", href=re.compile(r"-\d+\.html$"))
+                        or li.find("a", href=True)
+                    )
+                    if not a_tag:
+                        continue
+
+                    nombre = a_tag.get_text(strip=True)
+                    link = a_tag.get("href", "")
+                    texto = li.get_text(" ", strip=True)
+
+                    sku_match = re.search(r"\bSKU\s*(\d+)", texto, re.IGNORECASE)
+                    sku_id = sku_match.group(1) if sku_match else link
+
+                    texto_lower = texto.lower()
+                    sin_stock = (
+                        "agotado" in texto_lower or "sin stock" in texto_lower
+                    )
+
+                    precio_bulto = None
+                    match_bulto = re.search(
+                        r"Precio unitario por bulto cerrado\s*\$\s*([\d.,]+)\s*\$\s*([\d.,]+)",
+                        texto,
+                        re.IGNORECASE,
+                    )
+                    if match_bulto:
+                        # el segundo monto es el ya descontado
+                        precio_bulto = parsear_precio_ar(match_bulto.group(2))
+                    else:
+                        match_bulto_simple = re.search(
+                            r"Precio unitario por bulto cerrado\s*\$\s*([\d.,]+)",
+                            texto,
+                            re.IGNORECASE,
+                        )
+                        if match_bulto_simple:
+                            precio_bulto = parsear_precio_ar(
+                                match_bulto_simple.group(1)
+                            )
+
+                    if precio_bulto is None:
+                        # fallback: precio unitario suelto (o producto
+                        # sin stock, que no tiene precio en el listado)
+                        match_unitario = re.search(
+                            r"Precio unitario\s*\$\s*([\d.,]+)",
+                            texto,
+                            re.IGNORECASE,
+                        )
+                        if match_unitario:
+                            precio_bulto = parsear_precio_ar(
+                                match_unitario.group(1)
+                            )
+
+                    img_tag = a_tag.find("img") or li.find("img")
+                    imagen_url = None
+                    if img_tag:
+                        imagen_url = img_tag.get("src") or img_tag.get("data-src")
+
+                    productos_termino.append(
+                        {
+                            "sku_id": sku_id,
+                            "nombre": nombre,
+                            "precio": precio_bulto,
+                            "disponibilidad": (
+                                "sin_stock" if sin_stock else "available"
+                            ),
+                            "url": link,
+                            "imageurl": imagen_url,
+                            "ean": None,  # no disponible en Maxiconsumo
+                        }
+                    )
+
+                if len(items) < PRODUCTOS_POR_PAGINA_MAGENTO:
+                    break
+
+                pausa_entre_pedidos()
+
+            CACHE_BUSQUEDA[clave_cache] = productos_termino
+            pausa_entre_pedidos()
+
+        for prod in productos_termino:
+            if prod["sku_id"] in productos_por_sku:
+                continue
+            productos_por_sku[prod["sku_id"]] = prod
+
+    return list(productos_por_sku.values()), None
+
+
+# -----------------------------------------------------------------------
 # CHEQUEO DE DISPONIBILIDAD (sitios VTEX)
 # -----------------------------------------------------------------------
 def disponibilidad_indica_sin_stock(disponibilidad):
@@ -1359,6 +1631,7 @@ def escribir_en_google_sheets(filas: list):
                 "error",
                 "url",
                 "ean",
+                "sku",
             ]
         )
 
@@ -1373,6 +1646,7 @@ def escribir_en_google_sheets(filas: list):
             f["error"],
             f["url"],
             f.get("ean"),
+            f.get("sku"),
         ]
         for f in filas
     ]
@@ -1441,8 +1715,12 @@ def main():
                 print(f"    ({len(productos)} productos crudos de la API)")
 
             for prod in productos:
-                if linea.get("aplicar_incluir_en_vtex") and not pasa_filtro_inclusion(
-                    prod["nombre"], linea.get("incluir", [])
+                if (
+                    linea.get("aplicar_incluir_en_vtex")
+                    and not pasa_filtro_inclusion(prod["nombre"], linea.get("incluir", []))
+                    and not incluido_por_sku_forzado(
+                        prod.get("sku_id"), sitio["sitio"], linea
+                    )
                 ):
                     print(f"    [filtrado por 'incluir'] {prod['nombre']}")
                     continue
@@ -1542,7 +1820,9 @@ def main():
                 print(f"    ({len(productos_coto)} productos crudos de la API)")
 
             for prod in productos_coto:
-                if not pasa_filtro_inclusion(prod["nombre"], linea.get("incluir", [])):
+                if not pasa_filtro_inclusion(
+                    prod["nombre"], linea.get("incluir", [])
+                ) and not incluido_por_sku_forzado(prod.get("sku_id"), "coto", linea):
                     print(f"    [filtrado por 'incluir'] {prod['nombre']}")
                     continue
                 if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
@@ -1609,7 +1889,11 @@ def main():
                 )
 
             for prod in productos_paradineiro:
-                if not pasa_filtro_inclusion(prod["nombre"], linea.get("incluir", [])):
+                if not pasa_filtro_inclusion(
+                    prod["nombre"], linea.get("incluir", [])
+                ) and not incluido_por_sku_forzado(
+                    prod.get("sku_id"), "paradineiro", linea
+                ):
                     print(f"    [filtrado por 'incluir'] {prod['nombre']}")
                     continue
                 if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
@@ -1636,7 +1920,7 @@ def main():
 
                 if fila["precio"] is None:
                     print(
-                        f"    [sin precio, descartado] {fila['producto']} ({fila['disponibilidad']})"
+                        f"    [sin precio, descartado] {fila['producto']}"
                     )
                     continue
                 if fila["disponibilidad"] == "sin_stock":
@@ -1656,6 +1940,82 @@ def main():
                 )
 
         pausa_entre_pedidos()
+
+        # --- Sitios Magento (Maxiconsumo, etc.) ---
+        for sitio_magento in SITIOS_MAGENTO:
+            print(f"  Buscando en {sitio_magento['sitio']}...")
+            productos_magento, error = buscar_productos_magento(
+                sitio_magento["dominio"], sitio_magento["sucursal"], linea["busqueda"]
+            )
+            if error:
+                print(f"    [ERROR] {error}")
+                filas.append(
+                    {
+                        "fecha": fecha,
+                        "linea": linea["nombre"],
+                        "producto": None,
+                        "sitio": sitio_magento["sitio"],
+                        "precio": None,
+                        "disponibilidad": None,
+                        "error": error,
+                        "url": "",
+                    }
+                )
+                continue
+
+            if not productos_magento:
+                print("    (no se encontraron productos para este término)")
+            else:
+                print(f"    ({len(productos_magento)} productos crudos)")
+
+            for prod in productos_magento:
+                if not pasa_filtro_inclusion(
+                    prod["nombre"], linea.get("incluir", [])
+                ) and not incluido_por_sku_forzado(
+                    prod.get("sku_id"), sitio_magento["sitio"], linea
+                ):
+                    print(f"    [filtrado por 'incluir'] {prod['nombre']}")
+                    continue
+                if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
+                    print(f"    [filtrado por 'excluir'] {prod['nombre']}")
+                    continue
+                if sku_excluido(prod.get("sku_id"), sitio_magento["sitio"]):
+                    print(
+                        f"    [SKU excluido] "
+                        f"{prod.get('sku_id')} en {sitio_magento['sitio']}: "
+                        f"{prod['nombre']}"
+                    )
+                    continue
+
+                fila = {
+                    "fecha": fecha,
+                    "linea": linea["nombre"],
+                    "producto": prod["nombre"],
+                    "sitio": sitio_magento["sitio"],
+                    "precio": prod["precio"],
+                    "disponibilidad": prod["disponibilidad"],
+                    "error": "",
+                    "url": prod["url"],
+                    "ean": prod.get("ean"),  # siempre None por ahora
+                    "sku": prod.get("sku_id"),
+                }
+
+                if fila["precio"] is None:
+                    print(f"    [sin precio, descartado] {fila['producto']}")
+                    continue
+                if fila["disponibilidad"] == "sin_stock":
+                    print(f"    [sin stock, descartado] {fila['producto']}")
+                    continue
+
+                # No se registra imagen: sin EAN no hay con qué cruzarla
+                # en la caché de Imagenes_Productos.
+
+                filas.append(fila)
+                print(
+                    f"    -> {fila['producto']}: {fila['precio']} ({fila['disponibilidad']})"
+                )
+
+            pausa_entre_pedidos()
 
     try:
         escribir_en_google_sheets(filas)
