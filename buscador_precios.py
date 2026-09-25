@@ -1767,6 +1767,7 @@ def main():
                     "error": resultado.get("error", ""),
                     "url": prod.get("link", ""),
                     "ean": prod.get("ean"),
+                    "sku": prod.get("sku_id"),
                 }
 
                 # -------------------------------------------------------
@@ -1845,6 +1846,7 @@ def main():
                     "error": "",
                     "url": prod["url"],
                     "ean": prod.get("ean"),
+                    "sku": prod.get("sku_id"),
                 }
 
                 if fila["precio"] is None:
@@ -1916,6 +1918,7 @@ def main():
                     "error": "",
                     "url": prod["url"],
                     "ean": prod.get("ean"), 
+                    "sku": prod.get("sku_id"),
                 }
 
                 if fila["precio"] is None:
