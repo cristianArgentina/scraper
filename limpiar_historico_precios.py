@@ -20,18 +20,13 @@ SPREADSHEET_ID = (
 
 NOMBRE_HOJA = "Precios_Log_Lineas"
 
-EAN_EXCLUIDOS = {  
-    "10000701",    
-    "10000575",    
-    "10000720",    
-    "10000719",    
-    "10000715",
-    "10000718",
-    "10001095",
-    "245878",
-    "7509552902389",
-    "7798140257516",
-    "7798140256274",
+# Códigos a eliminar. Pueden ser EAN (la mayoría de proveedores)
+# o SKU (por ejemplo Maxiconsumo, que no tiene EAN).
+# El script revisa ambas columnas y elimina la fila si matchea
+# en cualquiera de las dos.
+CODIGOS_EXCLUIDOS = {
+    "7798140251651",
+    "27612",
 }
 
 
@@ -75,10 +70,10 @@ def main():
     print(" LIMPIEZA DE HISTÓRICO DE PRECIOS")
     print("==========================================\n")
 
-    print("EAN que serán eliminados:")
+    print("Códigos (EAN o SKU) que serán eliminados:")
 
-    for ean in sorted(EAN_EXCLUIDOS):
-        print(f"  - {ean}")
+    for codigo in sorted(CODIGOS_EXCLUIDOS):
+        print(f"  - {codigo}")
 
     print()
 
@@ -114,8 +109,23 @@ def main():
 
     indice_ean = encabezados.index("ean")
 
+    # La columna 'sku' es nueva (está a la derecha de 'ean') y
+    # puede no existir en hojas viejas, así que es opcional.
+    indice_sku = (
+        encabezados.index("sku")
+        if "sku" in encabezados
+        else None
+    )
+
+    if indice_sku is None:
+        print(
+            "\nAVISO: no encontré la columna 'sku'. "
+            "Sólo se va a filtrar por EAN."
+        )
+
     filas_a_eliminar = []
     filas_a_guardar_backup = []
+    matches_por_fila = []  # guarda si matcheó por 'ean', 'sku' o ambos
 
     # --------------------------------------------------------
     # Buscar filas
@@ -123,17 +133,28 @@ def main():
 
     for numero_fila, fila in enumerate(valores[1:], start=2):
 
-        if len(fila) <= indice_ean:
-            continue
+        ean = ""
+        if len(fila) > indice_ean:
+            ean = str(fila[indice_ean]).strip()
 
-        ean = str(
-            fila[indice_ean]
-        ).strip()
+        sku = ""
+        if indice_sku is not None and len(fila) > indice_sku:
+            sku = str(fila[indice_sku]).strip()
 
-        if ean in EAN_EXCLUIDOS:
+        matcheo_ean = ean != "" and ean in CODIGOS_EXCLUIDOS
+        matcheo_sku = sku != "" and sku in CODIGOS_EXCLUIDOS
+
+        if matcheo_ean or matcheo_sku:
 
             filas_a_eliminar.append(numero_fila)
             filas_a_guardar_backup.append(fila)
+
+            if matcheo_ean and matcheo_sku:
+                matches_por_fila.append("ean+sku")
+            elif matcheo_ean:
+                matches_por_fila.append("ean")
+            else:
+                matches_por_fila.append("sku")
 
     # --------------------------------------------------------
     # Resultado del análisis
@@ -146,26 +167,32 @@ def main():
 
     if not filas_a_eliminar:
 
-        print("\nNo hay filas con esos EAN.")
+        print("\nNo hay filas con esos códigos.")
         return
 
-    # Mostrar distribución
+    # Mostrar distribución (por código y por columna de origen)
     cantidades = {}
 
-    for fila in filas_a_guardar_backup:
+    for fila, origen in zip(filas_a_guardar_backup, matches_por_fila):
 
-        ean = str(
-            fila[indice_ean]
-        ).strip()
+        ean = str(fila[indice_ean]).strip() if len(fila) > indice_ean else ""
+        sku = (
+            str(fila[indice_sku]).strip()
+            if indice_sku is not None and len(fila) > indice_sku
+            else ""
+        )
 
-        cantidades[ean] = cantidades.get(ean, 0) + 1
+        codigo = ean if origen in ("ean", "ean+sku") else sku
+        clave = f"{codigo} ({origen})"
+
+        cantidades[clave] = cantidades.get(clave, 0) + 1
 
     print("\nDistribución:")
 
-    for ean in sorted(cantidades):
+    for clave in sorted(cantidades):
         print(
-            f"  {ean}: "
-            f"{cantidades[ean]} filas"
+            f"  {clave}: "
+            f"{cantidades[clave]} filas"
         )
 
     # --------------------------------------------------------

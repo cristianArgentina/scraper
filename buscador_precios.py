@@ -99,6 +99,7 @@ EAN_EXCLUIDOS = {
     "7509552902389",
     "7798140257516",
     "7798140256274",
+    "7798140251651",
 
 
     # Sedal - excluir por el momento
@@ -241,7 +242,7 @@ EAN_EXCLUIDOS_POR_COMERCIO = {
 # -----------------------------------------------------------------------
 SKU_EXCLUIDOS_POR_COMERCIO = {
     "maxiconsumo": {
-        # ej: "25996",
+        "27612",
     },
 }
 

@@ -57,7 +57,7 @@ SPREADSHEET_ID = "1l_2L8rGgCy97uscp-m4mk-0jLLrOA3C9a4ueVGoWB84"
 
 NOMBRE_HOJA_MATCH = "Match_Productos"
 
-UMBRAL_SIMILITUD = 0.90  # 0-1. Más alto = más estricto (menos falsos positivos).
+UMBRAL_SIMILITUD = 0.75  # 0-1. Más alto = más estricto (menos falsos positivos).
 
 
 # -----------------------------------------------------------------------
@@ -91,8 +91,36 @@ def limpiar(valor):
     return str(valor).strip()
 
 
+def normalizar_para_comparar(texto):
+    """
+    Minúsculas, saca puntuación ('/', comas, etc.) y ordena las palabras
+    alfabéticamente. Sirve para comparar nombres que dicen lo mismo pero
+    en distinto orden (ej. "Acondicionador Sedal Colageno 340 ml" vs
+    "Acondicionador con Colageno/Vitamina C Sedal 340 cc").
+    """
+    texto = (texto or "").lower()
+    texto = re.sub(r"[^a-z0-9áéíóúñ]+", " ", texto)
+    palabras = [p for p in texto.split() if p]
+    return " ".join(sorted(palabras))
+
+
 def similitud(a, b):
-    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+    """
+    Toma el mayor entre dos formas de comparar:
+      - ratio "crudo": caracter a caracter, en el orden en que aparecen
+        (bueno para detectar variaciones menores de tipeo).
+      - ratio "por palabras": mismo texto pero con las palabras
+        reordenadas alfabéticamente y sin puntuación (bueno para
+        cuando el mismo producto se describe con las palabras en otro
+        orden, como suele pasar entre sitios distintos).
+    Quedarnos con el máximo evita perder matches por el orden de las
+    palabras sin resignar precisión en los casos donde sí importa.
+    """
+    ratio_crudo = SequenceMatcher(None, a.lower(), b.lower()).ratio()
+    ratio_palabras = SequenceMatcher(
+        None, normalizar_para_comparar(a), normalizar_para_comparar(b)
+    ).ratio()
+    return max(ratio_crudo, ratio_palabras)
 
 
 # -----------------------------------------------------------------------
