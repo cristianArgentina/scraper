@@ -57,7 +57,7 @@ SPREADSHEET_ID = "1l_2L8rGgCy97uscp-m4mk-0jLLrOA3C9a4ueVGoWB84"
 
 NOMBRE_HOJA_MATCH = "Match_Productos"
 
-UMBRAL_SIMILITUD = 0.90  # 0-1. Más alto = más estricto (menos falsos positivos).
+UMBRAL_SIMILITUD = 0.75  # 0-1. Más alto = más estricto (menos falsos positivos).
 
 
 # -----------------------------------------------------------------------
