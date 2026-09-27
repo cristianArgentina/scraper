@@ -756,6 +756,56 @@ def es_url_imagen_valida(url):
     return url.startswith("http://") or url.startswith("https://")
 
 
+def es_imagen_accesible(url):
+    """
+    A diferencia de es_url_imagen_valida (que solo mira el formato del
+    string), esto hace una request real para confirmar que la imagen
+    efectivamente carga. Hace falta porque algunos sitios (confirmado
+    en Farmaonline) devuelven en su API una URL con pinta de válida
+    pero que da 404 — el activo fue borrado/nunca se subió del lado
+    del sitio.
+    """
+    if not es_url_imagen_valida(url):
+        return False
+
+    try:
+        resp = request_con_reintentos(
+            "HEAD", url, headers=HEADERS, max_intentos=1
+        )
+
+        if resp.status_code >= 400:
+            # Algunos CDNs no responden bien a HEAD; se prueba GET.
+            resp = request_con_reintentos(
+                "GET", url, headers=HEADERS, max_intentos=1
+            )
+
+        return resp.status_code < 400
+
+    except requests.RequestException:
+        return False
+
+
+def resolver_imagen(imageurl_api, link_detalle):
+    """
+    Devuelve una URL de imagen que realmente carga.
+
+    Prioriza la que vino de la API/listado; si no hay, o está rota
+    (formato válido pero 404/5xx real), prueba con la página de
+    detalle del producto (obtener_imagen_de_pagina). Devuelve None si
+    ninguna de las dos funciona.
+    """
+    if imageurl_api and es_imagen_accesible(imageurl_api):
+        return imageurl_api
+
+    if link_detalle:
+        imagen_pagina = obtener_imagen_de_pagina(link_detalle)
+
+        if imagen_pagina and es_imagen_accesible(imagen_pagina):
+            return imagen_pagina
+
+    return None
+
+
 def extraer_imagen_de_datos(datos):
     """
     Extrae una URL de imagen sin hacer ninguna petición adicional.
@@ -2012,14 +2062,13 @@ def main():
                     pausa_entre_pedidos()
                     continue
 
-                imagen_prod = prod.get("imageurl")
-
-                if not imagen_prod and prod.get("link"):
-                    # La API de búsqueda de VTEX no siempre trae imagen
-                    # para kits/combos (confirmado en Farmacity y
-                    # Farmaonline). Se busca en la página de detalle del
-                    # mismo producto, del mismo sitio.
-                    imagen_prod = obtener_imagen_de_pagina(prod["link"])
+                # resolver_imagen prueba primero la de la API/listado y,
+                # si falta o está rota (404 real, no solo el formato del
+                # string — pasa con algunos kits/combos de Farmaonline),
+                # cae al fallback de la página de detalle del producto.
+                imagen_prod = resolver_imagen(
+                    prod.get("imageurl"), prod.get("link")
+                )
 
                 if imagen_prod and (prod.get("ean") or prod.get("sku_id")):
                     registrar_imagen(
@@ -2255,14 +2304,9 @@ def main():
                 # propio en el listado: se registra igual, cacheada
                 # como "sitio::sku" para que quede atada a este mismo
                 # producto de este mismo sitio.
-                imagen_prod = prod.get("imageurl")
-
-                if not imagen_prod and prod.get("url"):
-                    # La grilla de resultados no siempre trae la imagen
-                    # real (lazy-load con placeholder, productos chicos
-                    # como muestras/dosis). Se busca en la página de
-                    # detalle del mismo producto.
-                    imagen_prod = obtener_imagen_de_pagina(prod["url"])
+                imagen_prod = resolver_imagen(
+                    prod.get("imageurl"), prod.get("url")
+                )
 
                 if imagen_prod and prod.get("sku_id"):
                     registrar_imagen(
