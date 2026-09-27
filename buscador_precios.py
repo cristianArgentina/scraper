@@ -551,6 +551,27 @@ def parsear_precio_punto(texto: str):
     except ValueError:
         return None
 
+def limpiar_ean(valor):
+    """
+    Normaliza un EAN crudo tal como lo devuelve la API/HTML de un
+    sitio. Algunos sitios (confirmado en Farmacity, para varios
+    combos/kits) devuelven literalmente "0" en el campo ean en vez de
+    dejarlo vacío. Si no se filtra acá, distintos productos con
+    ean="0" terminan compartiendo el mismo identificador/clave más
+    adelante (se agrupan entre sí en el catálogo, o se pisan la imagen
+    en la caché) — se trata igual que si no hubiera EAN.
+    """
+    ean = str(valor).strip() if valor else ""
+
+    if not ean:
+        return None
+
+    if set(ean) == {"0"}:
+        return None
+
+    return ean
+
+
 def ean_excluido(ean, sitio):
     """
     Determina si un EAN debe excluirse.
@@ -728,7 +749,7 @@ def clave_imagen(ean, sku, fuente):
         el mismo número).
     Devuelve None si no hay ningún dato utilizable.
     """
-    ean = str(ean).strip() if ean else ""
+    ean = limpiar_ean(ean) or ""
     sku = str(sku).strip() if sku else ""
     fuente = str(fuente).strip() if fuente else ""
 
@@ -1006,7 +1027,7 @@ def buscar_productos_vtex(dominio, busqueda):
                             "nombre": p.get("productName", ""),
                             "sku_id": item.get("itemId"),
                             "link": p.get("link"),
-                            "ean": item.get("ean"),
+                            "ean": limpiar_ean(item.get("ean")),
                             "imageurl": extraer_imagen_de_datos(item),
                         }
                     )
@@ -1089,7 +1110,7 @@ def buscar_productos_coto(busqueda):
                             f"promo: {promo_info}" if promo_info else "sin_promo"
                         ),
                         "url": url_completa,
-                        "ean": d.get("product_main_ean"),
+                        "ean": limpiar_ean(d.get("product_main_ean")),
                         "imageurl": extraer_imagen_de_datos(d),
                     }
                 )
@@ -1291,7 +1312,9 @@ def buscar_productos_paradineiro(busqueda):
                 # EAN
                 # -----------------------------------------------------
 
-                ean = buscar_ean_paradineiro(nombre, mapa_ean_paradineiro)
+                ean = limpiar_ean(
+                    buscar_ean_paradineiro(nombre, mapa_ean_paradineiro)
+                )
 
                 if not ean and nombre:
                     print(f"[EAN NO ENCONTRADO] Paradineiro: {nombre}")
