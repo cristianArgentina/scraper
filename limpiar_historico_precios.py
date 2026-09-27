@@ -25,8 +25,7 @@ NOMBRE_HOJA = "Precios_Log_Lineas"
 # El script revisa ambas columnas y elimina la fila si matchea
 # en cualquiera de las dos.
 CODIGOS_EXCLUIDOS = {
-    "7798140251651",
-    "27612",
+    "7798140259381",
 }
 
 
