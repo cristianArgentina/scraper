@@ -665,16 +665,80 @@ CACHE_BUSQUEDA = {}
 # CACHÉ DE IMÁGENES
 #
 # Se carga una sola vez desde Google Sheets al comenzar la ejecución.
-# EAN -> {"imageurl": "...", "fuente": "..."}
+# CLAVE -> {"imageurl": "...", "fuente": "...", "ean": "...", "sku": "..."}
 #
-# De esta manera, si un EAN ya tiene imagen, no volvemos a buscarla.
+# La CLAVE es:
+#   - el EAN, cuando el producto tiene uno (caso normal); o
+#   - "sitio::sku", cuando el producto NO tiene EAN (combos/kits que
+#     arman algunos sitios, donde en vez de EAN hay un identificador
+#     propio del sitio). Así la imagen queda atada a ESE producto de
+#     ESE sitio puntual, y nunca se toma "de forma arbitraria" la
+#     imagen de otro producto/sitio distinto que comparta nombre.
+#
+# De esta manera, si una clave ya tiene imagen, no volvemos a buscarla.
 # -----------------------------------------------------------------------
 CACHE_IMAGENES = {}
 
-# EAN que durante ESTA corrida ya fueron procesados.
-# Evita intentar obtener la misma imagen varias veces si el producto
-# aparece en varios comercios/líneas.
-EANS_IMAGEN_PROCESADOS = set()
+# Claves (EAN o "sitio::sku") que durante ESTA corrida ya fueron
+# procesadas. Evita intentar obtener la misma imagen varias veces si
+# el producto aparece en varios comercios/líneas.
+CLAVES_IMAGEN_PROCESADAS = set()
+
+
+def es_ean_valido(ean):
+    """
+    Valida el dígito de control GS1 de un EAN-8 o EAN-13.
+
+    Algunos sitios (ej. Farmaonline) meten en el campo "ean" de sus
+    combos/kits un ID interno propio en vez de un EAN real — pero como
+    tiene 8 dígitos, "parece" un EAN válido a simple vista. Esta
+    función distingue un EAN real de uno inventado, sin necesidad de
+    mantener a mano una lista de códigos "falsos" conocidos.
+    """
+
+    if not ean:
+        return False
+
+    ean = str(ean).strip()
+
+    if not ean.isdigit() or len(ean) not in (8, 13):
+        return False
+
+    digitos = [int(c) for c in ean]
+    cuerpo, digito_control = digitos[:-1], digitos[-1]
+
+    # EAN-8: pesos 3,1,3,1,3,1,3 · EAN-13: pesos 1,3,1,3,... (12 dígitos)
+    pesos = [3, 1, 3, 1, 3, 1, 3] if len(cuerpo) == 7 else [1, 3] * 6
+
+    suma = sum(d * p for d, p in zip(cuerpo, pesos))
+    control_calculado = (10 - (suma % 10)) % 10
+
+    return control_calculado == digito_control
+
+
+def clave_imagen(ean, sku, fuente):
+    """
+    Calcula la clave de caché para un producto:
+      - el EAN si es un EAN real (pasa el checksum GS1); o
+      - "fuente::sku" si no hay EAN real pero sí SKU propio del sitio
+        (combos/kits sin EAN, o un "ean" inventado por el sitio); o
+      - "fuente::ean" como último recurso, si el "ean" no es válido
+        pero tampoco hay SKU (así al menos queda acotado a ese sitio
+        y no contamina otros productos que por casualidad compartan
+        el mismo número).
+    Devuelve None si no hay ningún dato utilizable.
+    """
+    ean = str(ean).strip() if ean else ""
+    sku = str(sku).strip() if sku else ""
+    fuente = str(fuente).strip() if fuente else ""
+
+    if ean and es_ean_valido(ean):
+        return ean
+    if sku and fuente:
+        return f"{fuente}::{sku}"
+    if ean and fuente:
+        return f"{fuente}::{ean}"
+    return None
 
 # Nuevas imágenes que se subirán a Google Sheets al finalizar.
 NUEVAS_IMAGENES = []
@@ -1263,37 +1327,24 @@ def buscar_productos_magento(dominio: str, sucursal: str, busqueda):
                     )
 
                     precio_bulto = None
-                    match_bulto = re.search(
-                        r"Precio unitario por bulto cerrado\s*\$\s*([\d.,]+)\s*\$\s*([\d.,]+)",
+                    match_unitario = re.search(
+                        r"Precio unitario\s*\$\s*([\d.,]+)",
                         texto,
                         re.IGNORECASE,
                     )
-                    if match_bulto:
-                        # el segundo monto es el ya descontado
-                        precio_bulto = parsear_precio_ar(match_bulto.group(2))
-                    else:
-                        match_bulto_simple = re.search(
+                    if match_unitario:
+                        precio_bulto = parsear_precio_ar(match_unitario.group(1))
+
+                    if precio_bulto is None:
+                        # fallback: precio por bulto cerrado (ej. si el
+                        # sitio no expone precio suelto para este producto)
+                        match_bulto = re.search(
                             r"Precio unitario por bulto cerrado\s*\$\s*([\d.,]+)",
                             texto,
                             re.IGNORECASE,
                         )
-                        if match_bulto_simple:
-                            precio_bulto = parsear_precio_ar(
-                                match_bulto_simple.group(1)
-                            )
-
-                    if precio_bulto is None:
-                        # fallback: precio unitario suelto (o producto
-                        # sin stock, que no tiene precio en el listado)
-                        match_unitario = re.search(
-                            r"Precio unitario\s*\$\s*([\d.,]+)",
-                            texto,
-                            re.IGNORECASE,
-                        )
-                        if match_unitario:
-                            precio_bulto = parsear_precio_ar(
-                                match_unitario.group(1)
-                            )
+                        if match_bulto:
+                            precio_bulto = parsear_precio_ar(match_bulto.group(1))
 
                     img_tag = a_tag.find("img") or li.find("img")
                     imagen_url = None
@@ -1442,13 +1493,20 @@ def cargar_cache_imagenes(planilla):
 
     Devuelve:
         {
-            "EAN": {
+            "CLAVE": {
                 "imageurl": "...",
-                "fuente": "..."
+                "fuente": "...",
+                "ean": "...",
+                "sku": "...",
             }
         }
 
-    Si la hoja no existe, la crea.
+    CLAVE es el EAN, o "sitio::sku" cuando el producto no tiene EAN
+    (ver clave_imagen()).
+
+    Si la hoja no existe, la crea. Si existe pero es "vieja" (sin las
+    columnas sku/sitio, de antes de este cambio), se le agregan esas
+    columnas al final sin tocar los datos existentes.
     """
 
     try:
@@ -1458,9 +1516,9 @@ def cargar_cache_imagenes(planilla):
 
         print(f"[IMAGENES] Creando pestaña '{NOMBRE_HOJA_IMAGENES}'...")
 
-        hoja = planilla.add_worksheet(title=NOMBRE_HOJA_IMAGENES, rows=2000, cols=3)
+        hoja = planilla.add_worksheet(title=NOMBRE_HOJA_IMAGENES, rows=2000, cols=5)
 
-        hoja.append_row(["ean", "imageurl", "fuente"])
+        hoja.append_row(["ean", "imageurl", "fuente", "sku", "sitio"])
 
         return {}
 
@@ -1483,6 +1541,16 @@ def cargar_cache_imagenes(planilla):
 
     indice_fuente = encabezados.index("fuente") if "fuente" in encabezados else None
 
+    # Columnas nuevas (pueden no existir todavía en una hoja vieja).
+    # "sitio" guarda el mismo valor que "fuente" para las filas de
+    # combos/kits sin EAN; se guarda aparte para no depender de que
+    # "fuente" siempre coincida textualmente con el nombre del sitio.
+    indice_sku = encabezados.index("sku") if "sku" in encabezados else None
+    indice_sitio = encabezados.index("sitio") if "sitio" in encabezados else None
+
+    if indice_sku is None or indice_sitio is None:
+        asegurar_columnas_sku_sitio(hoja, encabezados)
+
     cache = {}
 
     for fila in valores[1:]:
@@ -1491,9 +1559,6 @@ def cargar_cache_imagenes(planilla):
             continue
 
         ean = str(fila[indice_ean]).strip()
-
-        if not ean:
-            continue
 
         imageurl = ""
 
@@ -1508,40 +1573,118 @@ def cargar_cache_imagenes(planilla):
         if indice_fuente is not None and len(fila) > indice_fuente:
             fuente = str(fila[indice_fuente]).strip()
 
-        cache[ean] = {"imageurl": imageurl, "fuente": fuente}
+        sku = ""
+        if indice_sku is not None and len(fila) > indice_sku:
+            sku = str(fila[indice_sku]).strip()
 
-    print(f"[IMAGENES] {len(cache)} EAN con imagen ya almacenados.")
+        sitio = ""
+        if indice_sitio is not None and len(fila) > indice_sitio:
+            sitio = str(fila[indice_sitio]).strip()
+
+        # Para filas viejas sin columna "sitio", usamos "fuente" como
+        # sitio (en la práctica siempre fue el nombre del sitio).
+        clave = clave_imagen(ean, sku, sitio or fuente)
+
+        if not clave:
+            continue
+
+        cache[clave] = {
+            "imageurl": imageurl,
+            "fuente": fuente,
+            "ean": ean,
+            "sku": sku,
+        }
+
+    print(f"[IMAGENES] {len(cache)} productos con imagen ya almacenados.")
 
     return cache
 
 
-def registrar_imagen(ean, imageurl, fuente):
+def asegurar_columnas_sku_sitio(hoja, encabezados):
+    """
+    Si la pestaña Imagenes_Productos todavía no tiene las columnas
+    "sku" y "sitio" (hoja creada antes de este cambio), las agrega al
+    final del encabezado sin tocar ninguna fila de datos existente.
+    """
 
-    if not ean:
-        return False
+    nuevos = list(encabezados)
 
-    ean = str(ean).strip()
+    if "sku" not in nuevos:
+        nuevos.append("sku")
+
+    if "sitio" not in nuevos:
+        nuevos.append("sitio")
+
+    if nuevos == encabezados:
+        return
+
+    try:
+        hoja.resize(cols=max(hoja.col_count, len(nuevos)))
+        hoja.update("A1", [nuevos])
+        print(
+            f"[IMAGENES] Se agregaron columnas 'sku'/'sitio' a "
+            f"'{NOMBRE_HOJA_IMAGENES}'."
+        )
+    except Exception as e:
+        print(f"[AVISO] No se pudieron agregar columnas sku/sitio: {e}")
+
+
+def registrar_imagen(ean, sku, imageurl, fuente):
+    """
+    Registra la imagen de un producto en la caché.
+
+    - Si el producto tiene EAN, se cachea por EAN (como siempre).
+    - Si NO tiene EAN pero sí un SKU propio del sitio (combos/kits),
+      se cachea por "sitio::sku", usando `fuente` como sitio. Así,
+      la próxima vez que aparezca ESE MISMO producto en ESE MISMO
+      sitio, se reutiliza SU imagen — nunca la de otro producto u
+      otro sitio.
+    """
 
     if not es_url_imagen_valida(imageurl):
         return False
 
+    clave = clave_imagen(ean, sku, fuente)
+
+    if not clave:
+        return False
+
     # Ya existe en Google Sheets.
-    if ean in CACHE_IMAGENES:
+    if clave in CACHE_IMAGENES:
         return False
 
     # Ya conseguimos una imagen durante esta corrida.
-    if ean in EANS_IMAGEN_PROCESADOS:
+    if clave in CLAVES_IMAGEN_PROCESADAS:
         return False
 
-    EANS_IMAGEN_PROCESADOS.add(ean)
+    CLAVES_IMAGEN_PROCESADAS.add(clave)
 
-    registro = {"imageurl": imageurl.strip(), "fuente": fuente}
+    ean = str(ean).strip() if ean else ""
+    sku = str(sku).strip() if sku else ""
 
-    CACHE_IMAGENES[ean] = registro
+    registro = {
+        "imageurl": imageurl.strip(),
+        "fuente": fuente,
+        "ean": ean,
+        "sku": sku,
+    }
 
-    NUEVAS_IMAGENES.append({"ean": ean, "imageurl": imageurl.strip(), "fuente": fuente})
+    CACHE_IMAGENES[clave] = registro
 
-    print(f"    [IMAGEN NUEVA] " f"EAN {ean} → {fuente}")
+    NUEVAS_IMAGENES.append(
+        {
+            "ean": ean,
+            "sku": sku,
+            "sitio": fuente,
+            "imageurl": imageurl.strip(),
+            "fuente": fuente,
+        }
+    )
+
+    if ean:
+        print(f"    [IMAGEN NUEVA] EAN {ean} → {fuente}")
+    else:
+        print(f"    [IMAGEN NUEVA] SKU {sku} en {fuente} (sin EAN, combo/kit)")
 
     return True
 
@@ -1559,11 +1702,28 @@ def guardar_nuevas_imagenes(planilla):
     try:
         hoja = planilla.worksheet(NOMBRE_HOJA_IMAGENES)
     except gspread.exceptions.WorksheetNotFound:
-        hoja = planilla.add_worksheet(title=NOMBRE_HOJA_IMAGENES, rows=2000, cols=3)
-        hoja.append_row(["ean", "imageurl", "fuente"])
+        hoja = planilla.add_worksheet(title=NOMBRE_HOJA_IMAGENES, rows=2000, cols=5)
+        hoja.append_row(["ean", "imageurl", "fuente", "sku", "sitio"])
+
+    encabezados = [str(x).strip().lower() for x in hoja.row_values(1)]
+
+    if "sku" not in encabezados or "sitio" not in encabezados:
+        asegurar_columnas_sku_sitio(hoja, encabezados)
+        encabezados = [str(x).strip().lower() for x in hoja.row_values(1)]
+
+    # Arma cada fila respetando el orden real de columnas de la hoja,
+    # para no romper hojas viejas migradas con columnas en otro orden.
+    valores_por_campo = {
+        "ean": lambda item: item["ean"],
+        "imageurl": lambda item: item["imageurl"],
+        "fuente": lambda item: item["fuente"],
+        "sku": lambda item: item["sku"],
+        "sitio": lambda item: item.get("sitio", item["fuente"]),
+    }
 
     filas = [
-        [item["ean"], item["imageurl"], item["fuente"]] for item in NUEVAS_IMAGENES
+        [valores_por_campo.get(col, lambda item: "")(item) for col in encabezados]
+        for item in NUEVAS_IMAGENES
     ]
 
     hoja.append_rows(filas, value_input_option="USER_ENTERED")
@@ -1787,8 +1947,13 @@ def main():
                     pausa_entre_pedidos()
                     continue
 
-                if prod.get("ean") and prod.get("imageurl"):
-                    registrar_imagen(prod["ean"], prod["imageurl"], sitio["sitio"])
+                if prod.get("imageurl") and (prod.get("ean") or prod.get("sku_id")):
+                    registrar_imagen(
+                        prod.get("ean"),
+                        prod.get("sku_id"),
+                        prod["imageurl"],
+                        sitio["sitio"],
+                    )
 
                 filas.append(fila)
                 print(
@@ -1854,8 +2019,10 @@ def main():
                     )
                     continue
 
-                if prod.get("ean") and prod.get("imageurl"):
-                    registrar_imagen(prod["ean"], prod["imageurl"], "coto")
+                if prod.get("imageurl") and (prod.get("ean") or prod.get("sku_id")):
+                    registrar_imagen(
+                        prod.get("ean"), prod.get("sku_id"), prod["imageurl"], "coto"
+                    )
 
                 filas.append(fila)
                 print(
@@ -1929,11 +2096,12 @@ def main():
                     print(f"    [sin stock, descartado] {fila['producto']}")
                     continue
 
-                if prod.get("ean") and prod.get("imageurl"):
+                if prod.get("imageurl") and (prod.get("ean") or prod.get("sku_id")):
                     registrar_imagen(
-                        prod["ean"],
+                        prod.get("ean"),
+                        prod.get("sku_id"),
                         prod["imageurl"],
-                        "paradineiro"
+                        "paradineiro",
                     )
 
                 filas.append(fila)
@@ -2009,8 +2177,17 @@ def main():
                     print(f"    [sin stock, descartado] {fila['producto']}")
                     continue
 
-                # No se registra imagen: sin EAN no hay con qué cruzarla
-                # en la caché de Imagenes_Productos.
+                # Maxiconsumo no expone EAN, pero sí trae imagen y SKU
+                # propio en el listado: se registra igual, cacheada
+                # como "sitio::sku" para que quede atada a este mismo
+                # producto de este mismo sitio.
+                if prod.get("imageurl") and prod.get("sku_id"):
+                    registrar_imagen(
+                        None,
+                        prod.get("sku_id"),
+                        prod["imageurl"],
+                        sitio_magento["sitio"],
+                    )
 
                 filas.append(fila)
                 print(
