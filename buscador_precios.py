@@ -100,7 +100,6 @@ EAN_EXCLUIDOS = {
     "7798140257516",
     "7798140256274",
     "7798140251651",
-    "7798140259381",
 
 
     # Sedal - excluir por el momento
@@ -831,6 +830,39 @@ def extraer_imagen_de_datos(datos):
     return recorrer(datos)
 
 
+def obtener_imagen_de_pagina_vtex(url):
+    """
+    Fallback para cuando la API de búsqueda de VTEX (items[0].images) no
+    trae imagen. Pasa seguido con productos tipo kit/combo (confirmado
+    en Farmacity y Farmaonline: la imagen existe en el sitio, pero no
+    viene en la respuesta de /api/catalog_system/pub/products/search).
+
+    Pide la página de detalle del producto (siempre del mismo sitio de
+    donde salió `url`) y toma la imagen de la meta "og:image", que es
+    estándar en cualquier storefront VTEX.
+    """
+    if not url:
+        return None
+
+    try:
+        resp = request_con_reintentos("GET", url, headers=HEADERS)
+        resp.raise_for_status()
+    except requests.RequestException:
+        return None
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    meta_img = soup.select_one('meta[property="og:image"]')
+
+    if meta_img:
+        url_imagen = meta_img.get("content")
+
+        if es_url_imagen_valida(url_imagen):
+            return url_imagen.strip()
+
+    return None
+
+
 # -----------------------------------------------------------------------
 # DESCUBRIMIENTO DE PRODUCTOS
 # -----------------------------------------------------------------------
@@ -1254,8 +1286,11 @@ def buscar_productos_magento(dominio: str, sucursal: str, busqueda):
     """
     Busca una línea de producto en un sitio Magento (Maxiconsumo) usando
     el buscador nativo (/catalogsearch/result/). El precio final
-    guardado es el de "bulto cerrado" (con descuento), no el unitario
-    suelto.
+    guardado es el de "bulto cerrado" (el que se ve en pantalla, con
+    IVA), no el unitario suelto. Maxiconsumo siempre expone junto a
+    ese precio un segundo monto que es el neto sin IVA (nunca se
+    muestra en pantalla, precio1/precio2 = 1.21) — no es un descuento,
+    así que ese segundo monto se ignora.
 
     IMPORTANTE: no usar el parámetro product_list_limit en esta ruta,
     rompe el sitio (da 500 - probado). Sin ese parámetro trae 12
@@ -1948,11 +1983,20 @@ def main():
                     pausa_entre_pedidos()
                     continue
 
-                if prod.get("imageurl") and (prod.get("ean") or prod.get("sku_id")):
+                imagen_prod = prod.get("imageurl")
+
+                if not imagen_prod and prod.get("link"):
+                    # La API de búsqueda de VTEX no siempre trae imagen
+                    # para kits/combos (confirmado en Farmacity y
+                    # Farmaonline). Se busca en la página de detalle del
+                    # mismo producto, del mismo sitio.
+                    imagen_prod = obtener_imagen_de_pagina_vtex(prod["link"])
+
+                if imagen_prod and (prod.get("ean") or prod.get("sku_id")):
                     registrar_imagen(
                         prod.get("ean"),
                         prod.get("sku_id"),
-                        prod["imageurl"],
+                        imagen_prod,
                         sitio["sitio"],
                     )
 
