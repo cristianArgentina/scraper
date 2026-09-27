@@ -830,16 +830,15 @@ def extraer_imagen_de_datos(datos):
     return recorrer(datos)
 
 
-def obtener_imagen_de_pagina_vtex(url):
+def obtener_imagen_de_pagina(url):
     """
-    Fallback para cuando la API de búsqueda de VTEX (items[0].images) no
-    trae imagen. Pasa seguido con productos tipo kit/combo (confirmado
-    en Farmacity y Farmaonline: la imagen existe en el sitio, pero no
-    viene en la respuesta de /api/catalog_system/pub/products/search).
-
-    Pide la página de detalle del producto (siempre del mismo sitio de
-    donde salió `url`) y toma la imagen de la meta "og:image", que es
-    estándar en cualquier storefront VTEX.
+    Fallback para cuando no se pudo sacar imagen del listado/API de
+    búsqueda (pasa con kits/combos en VTEX, y con productos chicos
+    lazy-loaded en Magento/Maxiconsumo). Pide la página de detalle del
+    producto (siempre del mismo sitio de donde salió `url`) y busca la
+    imagen ahí, primero por la meta "og:image" (estándar en VTEX y en
+    la mayoría de temas Magento), y si no está, por el primer <img>
+    que apunte a una ruta típica de imagen de producto.
     """
     if not url:
         return None
@@ -859,6 +858,29 @@ def obtener_imagen_de_pagina_vtex(url):
 
         if es_url_imagen_valida(url_imagen):
             return url_imagen.strip()
+
+    # Fallback: primer <img> que apunte a una ruta típica de imagen de
+    # producto (Magento: /media/catalog/product/, VTEX: vtexassets.com
+    # / vteximg.com.br).
+    for img in soup.find_all("img"):
+        src = img.get("data-src") or img.get("src")
+
+        if not src:
+            continue
+
+        if any(
+            patron in src
+            for patron in (
+                "/media/catalog/product/",
+                "vtexassets.com",
+                "vteximg.com.br",
+            )
+        ):
+            if src.startswith("//"):
+                src = "https:" + src
+
+            if es_url_imagen_valida(src):
+                return src.strip()
 
     return None
 
@@ -1385,7 +1407,14 @@ def buscar_productos_magento(dominio: str, sucursal: str, busqueda):
                     img_tag = a_tag.find("img") or li.find("img")
                     imagen_url = None
                     if img_tag:
-                        imagen_url = img_tag.get("src") or img_tag.get("data-src")
+                        # Primero data-src (lazy-load): en la grilla de
+                        # resultados, "src" suele tener un placeholder
+                        # y la imagen real está en data-src. Si no hay
+                        # data-src (imagen no lazy-loaded), se usa src.
+                        imagen_url = img_tag.get("data-src") or img_tag.get("src")
+
+                        if imagen_url and imagen_url.startswith("//"):
+                            imagen_url = "https:" + imagen_url
 
                     productos_termino.append(
                         {
@@ -1990,7 +2019,7 @@ def main():
                     # para kits/combos (confirmado en Farmacity y
                     # Farmaonline). Se busca en la página de detalle del
                     # mismo producto, del mismo sitio.
-                    imagen_prod = obtener_imagen_de_pagina_vtex(prod["link"])
+                    imagen_prod = obtener_imagen_de_pagina(prod["link"])
 
                 if imagen_prod and (prod.get("ean") or prod.get("sku_id")):
                     registrar_imagen(
@@ -2226,11 +2255,20 @@ def main():
                 # propio en el listado: se registra igual, cacheada
                 # como "sitio::sku" para que quede atada a este mismo
                 # producto de este mismo sitio.
-                if prod.get("imageurl") and prod.get("sku_id"):
+                imagen_prod = prod.get("imageurl")
+
+                if not imagen_prod and prod.get("url"):
+                    # La grilla de resultados no siempre trae la imagen
+                    # real (lazy-load con placeholder, productos chicos
+                    # como muestras/dosis). Se busca en la página de
+                    # detalle del mismo producto.
+                    imagen_prod = obtener_imagen_de_pagina(prod["url"])
+
+                if imagen_prod and prod.get("sku_id"):
                     registrar_imagen(
                         None,
                         prod.get("sku_id"),
-                        prod["imageurl"],
+                        imagen_prod,
                         sitio_magento["sitio"],
                     )
 
