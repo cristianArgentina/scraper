@@ -60,10 +60,7 @@ def procesar_vtex(linea, planilla_no_usada=None):
             if clave and clave in bp.CACHE_IMAGENES:
                 continue
 
-            imagen = prod.get("imageurl")
-
-            if not imagen and prod.get("link"):
-                imagen = bp.obtener_imagen_de_pagina(prod["link"])
+            imagen = bp.resolver_imagen(prod.get("imageurl"), prod.get("link"))
 
             if imagen and (prod.get("ean") or prod.get("sku_id")):
                 if bp.registrar_imagen(
@@ -102,10 +99,7 @@ def procesar_magento(linea):
             if clave and clave in bp.CACHE_IMAGENES:
                 continue
 
-            imagen = prod.get("imageurl")
-
-            if not imagen and prod.get("url"):
-                imagen = bp.obtener_imagen_de_pagina(prod["url"])
+            imagen = bp.resolver_imagen(prod.get("imageurl"), prod.get("url"))
 
             if imagen and prod.get("sku_id"):
                 if bp.registrar_imagen(
