@@ -435,6 +435,7 @@ SITIOS_VTEX = [
         "fallback_css": True,
         "sales_channel": "1",
         "postal_code": None,
+        "verificar_stock_catalogo": True,
     },
     {
         "sitio": "diaonline",
@@ -1022,6 +1023,13 @@ def buscar_productos_vtex(dominio, busqueda):
 
                     item = items[0]
 
+                    sellers = item.get("sellers") or []
+                    seller = next(
+                        (s for s in sellers if s.get("sellerDefault")),
+                        sellers[0] if sellers else {},
+                    )
+                    oferta = seller.get("commertialOffer") or {}
+
                     productos_termino.append(
                         {
                             "nombre": p.get("productName", ""),
@@ -1029,6 +1037,8 @@ def buscar_productos_vtex(dominio, busqueda):
                             "link": p.get("link"),
                             "ean": limpiar_ean(item.get("ean")),
                             "imageurl": extraer_imagen_de_datos(item),
+                            "stock_catalogo": oferta.get("AvailableQuantity"),
+                            "disponible_catalogo": oferta.get("IsAvailable"),
                         }
                     )
 
@@ -1543,18 +1553,7 @@ def obtener_precio_css(url: str):
         return {"error": f"error de conexión: {e}"}
 
     soup = BeautifulSoup(resp.text, "html.parser")
-    
-    
-    # Chequeo de disponibilidad real: en Carrefour, este span aparece
-    # con el texto "No Disponible" cuando el botón de compra está
-    # deshabilitado, independientemente de que el precio siga
-    # renderizado en la página.
-    boton_no_disponible = soup.select_one(
-        "span[class*='incompatible-cart'][class*='buttonContentText']"
-    )
-    if boton_no_disponible and "no disponible" in boton_no_disponible.get_text(strip=True).lower():
-        return {"precio": None, "disponibilidad": "sin_stock"}
-    
+     
     contenedor = soup.select_one(".vtex-product-price-1-x-sellingPrice")
     if contenedor is None:
         return {"error": "no se encontró el contenedor de precio"}
@@ -1598,12 +1597,13 @@ def obtener_precio_simulacion_promo_2u(
         (data.get("ratesAndBenefitsData") or {}).get("rateAndBenefitsIdentifiers")
     )
 
+    if disponible != "available":
+        return {"precio": None, "disponibilidad": disponible or "desconocida"}
+    
     for item in items:
         precio_venta = item.get("sellingPrice")
         cantidad = item.get("quantity", 1)
         if precio_venta is None:
-            if disponible == "withoutStock":
-                return {"precio": None, "disponibilidad": "withoutStock"}
             return {"error": "no vino sellingPrice en alguno de los items"}
         total_centavos += precio_venta * cantidad
         total_unidades += cantidad
@@ -2031,6 +2031,12 @@ def main():
                         f"{prod['nombre']}"
                     )
                     continue
+                if sitio.get("verificar_stock_catalogo") and (
+                    prod.get("stock_catalogo") == 0
+                    or prod.get("disponible_catalogo") is False
+                ):
+                    print(f"    [sin stock en catálogo, descartado] {prod['nombre']}")
+                    continue
                 if sitio["metodo_precio"] == "css" and prod["link"]:
                     resultado = obtener_precio_css(prod["link"])
                 else:
@@ -2054,6 +2060,7 @@ def main():
                                 "precio": resultado_css["precio"],
                                 "disponibilidad": "withoutStock (verificado en HTML)",
                             }
+
                 fila = {
                     "fecha": fecha,
                     "linea": linea["nombre"],
@@ -2139,10 +2146,10 @@ def main():
                 if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
                     print(f"    [filtrado por 'excluir'] {prod['nombre']}")
                     continue
-                if ean_excluido(prod.get("ean"), sitio["sitio"]):
+                if ean_excluido(prod.get("ean"), "coto"):
                     print(
                         f"    [EAN excluido] "
-                        f"{prod.get('ean')} en {sitio['sitio']}: "
+                        f"{prod.get('ean')} en coto: "
                         f"{prod['nombre']}"
                     )
                     continue
@@ -2213,10 +2220,10 @@ def main():
                 if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
                     print(f"    [filtrado por 'excluir'] {prod['nombre']}")
                     continue
-                if ean_excluido(prod.get("ean"), sitio["sitio"]):
+                if ean_excluido(prod.get("ean"), "paradineiro"):
                     print(
                         f"    [EAN excluido] "
-                        f"{prod.get('ean')} en {sitio['sitio']}: "
+                        f"{prod.get('ean')} en paradineiro: "
                         f"{prod['nombre']}"
                     )
                     continue
