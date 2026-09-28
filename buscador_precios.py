@@ -254,7 +254,8 @@ SKU_EXCLUIDOS_POR_COMERCIO = {
     "maxiconsumo": {
         "27612",
         "4603",
-        "4604",
+        "4604",    
+        "4749",
     },
 }
 
