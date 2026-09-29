@@ -115,4 +115,4 @@ def disponibilidad_indica_sin_stock(disponibilidad):
     """
     if not disponibilidad:
         return False
-    return disponibilidad.strip().lower().startswith("withoutstock")
+    return disponibilidad.strip().lower().startswith(("withoutstock", "sin_stock"))
