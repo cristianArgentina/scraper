@@ -27,7 +27,8 @@ NOMBRE_HOJA = "Precios_Log_Lineas"
 CODIGOS_EXCLUIDOS = {
       "245790",
       "241709",
-      "239333"
+      "239333",
+      "7891150106802"
 }
 
 
