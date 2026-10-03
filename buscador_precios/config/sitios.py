@@ -97,7 +97,7 @@ SITIOS_VTEX = [
         "metodo_precio": "promo2u",
         "fallback_css": True,
         "sales_channel": "1",
-        "postal_code": None,
+        "postal_code": None,        
     },
     {
         # Vea (Cencosud). Canal de venta 34 (cookie vtex_segment). El resto de la
@@ -109,7 +109,8 @@ SITIOS_VTEX = [
         "fallback_css": True,
         "sales_channel": "34",
         "postal_code": None,
-                # Vea no aplica el 2x1 / 2do al X% en la simulación de VTEX: sus
+        "verificar_stock_catalogo": True,
+        # Vea no aplica el 2x1 / 2do al X% en la simulación de VTEX: sus
         # promos salen de este endpoint propio (campo effectiveDiscount).
         # El "seller" es la sucursal cuyas promos se consultan (acá, Córdoba
         # 700, la que tenía elegida el navegador); puede variar por sucursal.

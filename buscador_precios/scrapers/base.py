@@ -40,6 +40,12 @@ class Scraper:
         su precio, o None si sigue adelante."""
         return None
 
+    def preparar(self, productos):
+        """Hook: el pipeline lo llama UNA vez por línea, con los productos que
+        ya pasaron todos los filtros y antes de pedir sus precios. Sirve para
+        consultas por lote que solo conviene hacer para lo que va a quedar."""
+        return None
+    
     def obtener_precio(self, prod):
         """Devuelve {"precio", "disponibilidad", "error"(opcional)}.
         Por defecto usa el precio que ya vino en el listado."""

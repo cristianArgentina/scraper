@@ -69,13 +69,21 @@ def _procesar(linea, scraper, fecha):
         print(f"    ({len(productos)} productos crudos)")
 
     filas = []
-
+    # 1) Filtros previos (nombre / EAN / SKU / stock de catálogo).
+    aceptados = []
     for prod in productos or []:
         motivo = _motivo_descarte_previo(prod, linea, scraper)
         if motivo:
             print(f"    [{motivo}] {prod['nombre']}")
             continue
+        aceptados.append(prod)
 
+    # 2) Consultas por lote solo para lo que sobrevivió a los filtros.
+    if aceptados:
+        scraper.preparar(aceptados)
+
+    # 3) Precio, descartes e imagen de cada producto aceptado.
+    for prod in aceptados:
         resultado = scraper.obtener_precio(prod)
 
         fila = {

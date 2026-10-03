@@ -214,7 +214,7 @@ def obtener_precio_simulacion_promo_2u(
 # unidad llevando la cantidad de la promo. Precio final = precio * (1 - d).
 # Se activa con cfg["promociones"] = {"url": ..., "seller": ...}.
 # -----------------------------------------------------------------------
-TAMANIO_LOTE_PROMOCIONES = 40
+TAMANIO_LOTE_PROMOCIONES = 10
 
 
 def _promo_vigente(promo, ahora):
@@ -253,7 +253,10 @@ def consultar_promociones_tienda(dominio: str, cfg_promos: dict, skus: list):
             resp.raise_for_status()
             data = resp.json()
         except (requests.RequestException, ValueError) as e:
-            print(f"    [AVISO] no se pudieron consultar las promos ({type(e).__name__}): {e}")
+            print(
+                f"    [AVISO] no se pudieron consultar las promos de {len(lote)} "
+                f"SKU(s) {lote} ({type(e).__name__}): {e}"
+            )
             continue
 
         # Solo "generic". "jumbo_prime" es para clientes del programa Prime.
@@ -291,24 +294,25 @@ class ScraperVtex(Scraper):
         if productos:
             for prod in productos:
                 prod["url"] = prod.get("link", "")
-
-            cfg_promos = self.cfg.get("promociones")
-            if cfg_promos:
-                # Una consulta por lote en vez de una por producto.
-                pendientes = [
-                    str(p["sku_id"]) for p in productos if "promo" not in p
-                ]
-                promos = (
-                    consultar_promociones_tienda(
-                        self.cfg["dominio"], cfg_promos, pendientes
-                    )
-                    if pendientes
-                    else {}
-                )
-                for prod in productos:
-                    if "promo" not in prod:
-                        prod["promo"] = promos.get(str(prod["sku_id"]))
         return productos, error
+    
+    def preparar(self, productos):
+        """Trae las promos propias de la tienda (si el sitio las tiene
+        configuradas) solo para los productos que pasaron los filtros."""
+        cfg_promos = self.cfg.get("promociones")
+        if not cfg_promos:
+            return
+
+        pendientes = [str(p["sku_id"]) for p in productos if "promo" not in p]
+        if not pendientes:
+            return
+
+        promos = consultar_promociones_tienda(
+            self.cfg["dominio"], cfg_promos, pendientes
+        )
+        for prod in productos:
+            if "promo" not in prod:
+                prod["promo"] = promos.get(str(prod["sku_id"]))
 
     def aplica_incluir(self, linea):
         # En VTEX el filtro 'incluir' es opcional: solo se aplica si la
