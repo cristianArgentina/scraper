@@ -99,6 +99,17 @@ SITIOS_VTEX = [
         "sales_channel": "1",
         "postal_code": None,
     },
+    {
+        # Vea (Cencosud). Canal de venta 34 (cookie vtex_segment). El resto de la
+        # config es la base de Carrefour, sin confirmar contra el sitio: revisar
+        # en la primera corrida que no salga una fila de error.
+        "sitio": "vea",
+        "dominio": "www.vea.com.ar",
+        "metodo_precio": "promo2u",
+        "fallback_css": True,
+        "sales_channel": "34",
+        "postal_code": None,
+    },
 ]
 
 COTO_SEARCH_URL = (
