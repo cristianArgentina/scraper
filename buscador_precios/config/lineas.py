@@ -49,35 +49,18 @@ LINEAS = [
         "excluir": [r"200\s*(ml|cc)", r"750\s*(ml|cc)"],
     },
     {
-        "nombre": "Cicatricure 400",
+        "nombre": "Cicatricure",
         "busqueda": ["cicatricure-400", "cicatricure-age-care", "cicatricure-gel-60"],
         "incluir": ["cicatricure"],
         "excluir": [
-            r"\bgel\b",
             r"\bporcelana\b",
-            r"\bacqua defense\b",
-            r"\bage care\b",
-            r"\bfacial\b",
             r"\bcontorno\b",
-            r"\bs[eé]rum\b",
             r"\bpeeling\b",
-            r"\btricure\b",
-            r"\bantiedad\b",
-            r"\baclarante\b",
             r"\bblur\b",
-            r"maquillaje",
             r"gold lift",
             r"regene-?plast",
             r"reparaci[oó]n epid[eé]rmica",
-            r"neuro-?zen",
         ],
-    },
-    {
-        "nombre": "Cicatricure Age Care",
-        "busqueda": ["cicatricure-400", "cicatricure-age-care", "cicatricure-gel-60"],
-        "incluir": [r"age care"],
-        "aplicar_incluir_en_vtex": True,
-        "excluir": [],
     },
     {
         "nombre": "DiabetTX / Goicoechea 400",
@@ -99,19 +82,5 @@ LINEAS = [
         # quieren (confirmado). El resto de tamaños (300ml, 340ml, etc.)
         # sí quedan.
         "excluir": [r"650\s*(ml|cc)", r"190\s*(ml|cc)"],
-    },
-    {
-        "nombre": "Cicatricure Gel 60",
-        "busqueda": ["cicatricure-400", "cicatricure-age-care", "cicatricure-gel-60"],
-        "incluir": ["cicatricure"],
-        "excluir": [
-            r"\bcorporal\b",
-            r"400\s*(ml|cc)",
-            r"\bage care\b",
-            r"beauty care",
-            r"maquillaje",
-            r"gold lift",
-            r"\bcontorno\b",
-        ],
     },
 ]
