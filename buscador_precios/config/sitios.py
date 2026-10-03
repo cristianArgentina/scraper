@@ -109,6 +109,14 @@ SITIOS_VTEX = [
         "fallback_css": True,
         "sales_channel": "34",
         "postal_code": None,
+                # Vea no aplica el 2x1 / 2do al X% en la simulación de VTEX: sus
+        # promos salen de este endpoint propio (campo effectiveDiscount).
+        # El "seller" es la sucursal cuyas promos se consultan (acá, Córdoba
+        # 700, la que tenía elegida el navegador); puede variar por sucursal.
+        "promociones": {
+            "url": "https://www.vea.com.ar/_v/search-promotions",
+            "seller": "jumboargentinav700cordoba700",
+        },
     },
 ]
 

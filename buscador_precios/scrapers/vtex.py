@@ -1,9 +1,11 @@
 """Scraper de sitios VTEX (Farmaonline, Farmacity, Carrefour, etc.)."""
 
+from datetime import datetime
+
 import requests
 from bs4 import BeautifulSoup
 
-from config.settings import HEADERS
+from config.settings import HEADERS, ZONA_HORARIA
 from config.sitios import MAX_PAGINAS_VTEX, PRODUCTOS_POR_PAGINA_VTEX
 from core.cache import CACHE_BUSQUEDA
 from core.ean import limpiar_ean
@@ -202,6 +204,78 @@ def obtener_precio_simulacion_promo_2u(
         "disponibilidad": f"promo: {nombre_promo}" if nombre_promo else disponible,
     }
 
+# -----------------------------------------------------------------------
+# PROMOCIONES PROPIAS DE LA TIENDA (ej. Vea: POST /_v/search-promotions)
+#
+# En Vea la simulación de compra de VTEX NO aplica promos tipo 2x1 / 2do al
+# 80% (devuelve el precio de lista aunque se pidan 2 unidades). La tienda
+# las calcula aparte, en este endpoint, y trae por SKU un
+# "effectiveDiscount" (ej. "0.50" para un 2x1) = descuento promedio por
+# unidad llevando la cantidad de la promo. Precio final = precio * (1 - d).
+# Se activa con cfg["promociones"] = {"url": ..., "seller": ...}.
+# -----------------------------------------------------------------------
+TAMANIO_LOTE_PROMOCIONES = 40
+
+
+def _promo_vigente(promo, ahora):
+    """True si hoy está entre start y end. Sin fechas = vigente; con
+    fechas ilegibles = no se aplica (mejor precio normal que uno falso)."""
+    try:
+        inicio = promo.get("start")
+        fin = promo.get("end")
+        if inicio and ahora < datetime.fromisoformat(inicio):
+            return False
+        if fin and ahora > datetime.fromisoformat(fin):
+            return False
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
+def consultar_promociones_tienda(dominio: str, cfg_promos: dict, skus: list):
+    """Devuelve {sku: promo} con las promos VIGENTES de los SKUs pedidos.
+    Si el endpoint falla, devuelve {} (se usa el precio normal)."""
+    url = cfg_promos["url"]
+    headers = {
+        **HEADERS,
+        "Content-Type": "application/json",
+        "Origin": f"https://{dominio}",
+        "Referer": f"https://{dominio}/",
+    }
+    ahora = datetime.now(ZONA_HORARIA)
+    resultado = {}
+
+    for i in range(0, len(skus), TAMANIO_LOTE_PROMOCIONES):
+        lote = [str(s) for s in skus[i : i + TAMANIO_LOTE_PROMOCIONES]]
+        body = {"seller": cfg_promos["seller"], "skus": lote}
+        try:
+            resp = request_con_reintentos("POST", url, json=body, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+        except (requests.RequestException, ValueError) as e:
+            print(f"    [AVISO] no se pudieron consultar las promos ({type(e).__name__}): {e}")
+            continue
+
+        # Solo "generic". "jumbo_prime" es para clientes del programa Prime.
+        promos = ((data.get("promotions") or {}).get("generic") or {}).get(
+            "promotions"
+        ) or {}
+
+        for sku, promo in promos.items():
+            try:
+                descuento = float(promo.get("effectiveDiscount"))
+            except (TypeError, ValueError):
+                continue
+            if not (0 < descuento < 1):
+                continue
+            if not _promo_vigente(promo, ahora):
+                continue
+            resultado[str(sku)] = {
+                "descuento": descuento,
+                "nombre": promo.get("name") or promo.get("code") or "promo",
+            }
+
+    return resultado
 
 class ScraperVtex(Scraper):
     pausa_por_producto = True
@@ -217,6 +291,23 @@ class ScraperVtex(Scraper):
         if productos:
             for prod in productos:
                 prod["url"] = prod.get("link", "")
+
+            cfg_promos = self.cfg.get("promociones")
+            if cfg_promos:
+                # Una consulta por lote en vez de una por producto.
+                pendientes = [
+                    str(p["sku_id"]) for p in productos if "promo" not in p
+                ]
+                promos = (
+                    consultar_promociones_tienda(
+                        self.cfg["dominio"], cfg_promos, pendientes
+                    )
+                    if pendientes
+                    else {}
+                )
+                for prod in productos:
+                    if "promo" not in prod:
+                        prod["promo"] = promos.get(str(prod["sku_id"]))
         return productos, error
 
     def aplica_incluir(self, linea):
@@ -261,7 +352,24 @@ class ScraperVtex(Scraper):
                     "disponibilidad": "withoutStock (verificado en HTML)",
                 }
 
-        return resultado
+        return self._aplicar_promo_tienda(prod, resultado)
+
+    def _aplicar_promo_tienda(self, prod, resultado):
+        """Aplica la promo propia de la tienda (ver consultar_promociones_tienda)
+        solo si el producto tiene precio y stock, y la simulación de VTEX no
+        aplicó ya una promo (para no descontar dos veces)."""
+        promo = prod.get("promo")
+        if not promo or resultado.get("precio") is None:
+            return resultado
+
+        disponibilidad = resultado.get("disponibilidad") or ""
+        if disponibilidad != "available":
+            return resultado  # sin stock / ya trae promo de VTEX / verificado en HTML
+
+        nuevo = dict(resultado)
+        nuevo["precio"] = round(resultado["precio"] * (1 - promo["descuento"]), 2)
+        nuevo["disponibilidad"] = f"promo: {promo['nombre']}"
+        return nuevo
 
     def imagen(self, prod):
         # resolver_imagen prueba primero la de la API/listado y, si falta

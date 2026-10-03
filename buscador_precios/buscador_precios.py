@@ -22,6 +22,8 @@ Uso:
     python3 buscador_precios.py
 """
 
+import os
+
 from datetime import datetime
 
 import gspread
@@ -74,6 +76,13 @@ def main():
     # -------------------------------------------------------------------
     # GUARDAR RESULTADOS
     # -------------------------------------------------------------------
+    # Para pruebas: SIN_GUARDAR=1 muestra todo por consola y no escribe nada
+    # en Google Sheets (ni precios ni imágenes).
+    if os.environ.get("SIN_GUARDAR") == "1":
+        print(
+            f"\n[SIN_GUARDAR] {len(filas)} filas calculadas, no se guardó nada en Sheets."
+        )
+        return
     try:
         escribir_en_google_sheets(filas)
     except Exception as e:

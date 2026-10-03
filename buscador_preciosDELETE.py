@@ -389,79 +389,90 @@ LINEAS = [
 #                (poco común), se le puede poner acá puntualmente.
 # -----------------------------------------------------------------------
 SITIOS_VTEX = [
+    # {
+    #     "sitio": "farmaonline",
+    #     "dominio": "www.farmaonline.com",
+    #     "metodo_precio": "promo2u",
+    #     "fallback_css": True,
+    #     "sales_channel": "1",
+    #     "postal_code": None,
+    # },
+    # {
+    #     "sitio": "farmalife",
+    #     "dominio": "www.farmalife.com.ar",
+    #     "metodo_precio": "promo2u",
+    #     "fallback_css": True,
+    #     "sales_channel": "1",
+    #     "postal_code": None,
+    # },
+    # {
+    #     "sitio": "farmacity",
+    #     "dominio": "www.farmacity.com",
+    #     "metodo_precio": "promo2u",
+    #     "fallback_css": False,
+    #     "sales_channel": "4",
+    #     "postal_code": None,
+    # },
+    # {
+    #     "sitio": "masonline",
+    #     "dominio": "www.masonline.com.ar",
+    #     "metodo_precio": "promo2u",
+    #     "fallback_css": True,
+    #     "sales_channel": "1",
+    #     "postal_code": None,
+    # },
+    # {
+    #     "sitio": "perfumeriaspigmento",
+    #     "dominio": "www.perfumeriaspigmento.com.ar",
+    #     "metodo_precio": "promo2u",
+    #     "fallback_css": True,
+    #     "sales_channel": "1",
+    #     "postal_code": None,
+    # },
+    # {
+    #     "sitio": "farmaplus",
+    #     "dominio": "www.farmaplus.com.ar",
+    #     "metodo_precio": "promo2u",
+    #     "fallback_css": True,
+    #     "sales_channel": "1",
+    #     "postal_code": None,
+    # },
+    # {
+    #     "sitio": "josimar",
+    #     "dominio": "www.josimar.com.ar",
+    #     "metodo_precio": "css",
+    #     "fallback_css": False,
+    #     "sales_channel": "1",
+    #     "postal_code": None,
+    # },
+    # {
+    #     "sitio": "carrefour",
+    #     "dominio": "www.carrefour.com.ar",
+    #     "metodo_precio": "promo2u",
+    #     "fallback_css": True,
+    #     "sales_channel": "1",
+    #     "postal_code": None,
+    #     "verificar_stock_catalogo": True,
+    # },
+    # {
+    #     "sitio": "diaonline",
+    #     "dominio": "diaonline.supermercadosdia.com.ar",
+    #     "metodo_precio": "promo2u",
+    #     "fallback_css": True,
+    #     "sales_channel": "1",
+    #     "postal_code": None,
+    # },
     {
-        "sitio": "farmaonline",
-        "dominio": "www.farmaonline.com",
+        # Vea (Cencosud). Canal de venta 34 (cookie vtex_segment). El resto de la
+        # config es la base de Carrefour, sin confirmar contra el sitio: revisar
+        # en la primera corrida que no salga una fila de error.
+        "sitio": "vea",
+        "dominio": "www.vea.com.ar",
         "metodo_precio": "promo2u",
         "fallback_css": True,
-        "sales_channel": "1",
+        "sales_channel": "34",
         "postal_code": None,
-    },
-    {
-        "sitio": "farmalife",
-        "dominio": "www.farmalife.com.ar",
-        "metodo_precio": "promo2u",
-        "fallback_css": True,
-        "sales_channel": "1",
-        "postal_code": None,
-    },
-    {
-        "sitio": "farmacity",
-        "dominio": "www.farmacity.com",
-        "metodo_precio": "promo2u",
-        "fallback_css": False,
-        "sales_channel": "4",
-        "postal_code": None,
-    },
-    {
-        "sitio": "masonline",
-        "dominio": "www.masonline.com.ar",
-        "metodo_precio": "promo2u",
-        "fallback_css": True,
-        "sales_channel": "1",
-        "postal_code": None,
-    },
-    {
-        "sitio": "perfumeriaspigmento",
-        "dominio": "www.perfumeriaspigmento.com.ar",
-        "metodo_precio": "promo2u",
-        "fallback_css": True,
-        "sales_channel": "1",
-        "postal_code": None,
-    },
-    {
-        "sitio": "farmaplus",
-        "dominio": "www.farmaplus.com.ar",
-        "metodo_precio": "promo2u",
-        "fallback_css": True,
-        "sales_channel": "1",
-        "postal_code": None,
-    },
-    {
-        "sitio": "josimar",
-        "dominio": "www.josimar.com.ar",
-        "metodo_precio": "css",
-        "fallback_css": False,
-        "sales_channel": "1",
-        "postal_code": None,
-    },
-    {
-        "sitio": "carrefour",
-        "dominio": "www.carrefour.com.ar",
-        "metodo_precio": "promo2u",
-        "fallback_css": True,
-        "sales_channel": "1",
-        "postal_code": None,
-        "verificar_stock_catalogo": True,
-    },
-    {
-        "sitio": "diaonline",
-        "dominio": "diaonline.supermercadosdia.com.ar",
-        "metodo_precio": "promo2u",
-        "fallback_css": True,
-        "sales_channel": "1",
-        "postal_code": None,
-    },
+    }
 ]
 
 COTO_SEARCH_URL = (
@@ -498,11 +509,11 @@ MAX_PAGINAS_VTEX = 3
 # Magento en la columna "sku" de la hoja.
 # -----------------------------------------------------------------------
 SITIOS_MAGENTO = [
-    {
-        "sitio": "maxiconsumo",
-        "dominio": "www.maxiconsumo.com",
-        "sucursal": "sucursal_villa_dominico",
-    },
+    # {
+    #     "sitio": "maxiconsumo",
+    #     "dominio": "www.maxiconsumo.com",
+    #     "sucursal": "sucursal_villa_dominico",
+    # },
 ]
 
 MAX_PAGINAS_MAGENTO = 5  # 5 páginas x 12 = hasta 60 productos por término
@@ -2131,262 +2142,262 @@ def main():
                 )
                 pausa_entre_pedidos()
 
-        # --- Coto ---
-        print(f"  Buscando en coto...")
-        productos_coto, error = buscar_productos_coto(linea["busqueda"])
-        if error:
-            print(f"    [ERROR] {error}")
-            filas.append(
-                {
-                    "fecha": fecha,
-                    "linea": linea["nombre"],
-                    "producto": None,
-                    "sitio": "coto",
-                    "precio": None,
-                    "disponibilidad": None,
-                    "error": error,
-                    "url": "",
-                }
-            )
-        else:
-            if not productos_coto:
-                print("    (la API no devolvió ningún producto para este término)")
-            else:
-                print(f"    ({len(productos_coto)} productos crudos de la API)")
+        # # --- Coto ---
+        # print(f"  Buscando en coto...")
+        # productos_coto, error = buscar_productos_coto(linea["busqueda"])
+        # if error:
+        #     print(f"    [ERROR] {error}")
+        #     filas.append(
+        #         {
+        #             "fecha": fecha,
+        #             "linea": linea["nombre"],
+        #             "producto": None,
+        #             "sitio": "coto",
+        #             "precio": None,
+        #             "disponibilidad": None,
+        #             "error": error,
+        #             "url": "",
+        #         }
+        #     )
+        # else:
+        #     if not productos_coto:
+        #         print("    (la API no devolvió ningún producto para este término)")
+        #     else:
+        #         print(f"    ({len(productos_coto)} productos crudos de la API)")
 
-            for prod in productos_coto:
-                if not pasa_filtro_inclusion(
-                    prod["nombre"], linea.get("incluir", [])
-                ) and not incluido_por_sku_forzado(prod.get("sku_id"), "coto", linea):
-                    print(f"    [filtrado por 'incluir'] {prod['nombre']}")
-                    continue
-                if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
-                    print(f"    [filtrado por 'excluir'] {prod['nombre']}")
-                    continue
-                if ean_excluido(prod.get("ean"), "coto"):
-                    print(
-                        f"    [EAN excluido] "
-                        f"{prod.get('ean')} en coto: "
-                        f"{prod['nombre']}"
-                    )
-                    continue
-                fila = {
-                    "fecha": fecha,
-                    "linea": linea["nombre"],
-                    "producto": prod["nombre"],
-                    "sitio": "coto",
-                    "precio": prod["precio"],
-                    "disponibilidad": prod["disponibilidad"],
-                    "error": "",
-                    "url": prod["url"],
-                    "ean": prod.get("ean"),
-                    "sku": prod.get("sku_id"),
-                }
+        #     for prod in productos_coto:
+        #         if not pasa_filtro_inclusion(
+        #             prod["nombre"], linea.get("incluir", [])
+        #         ) and not incluido_por_sku_forzado(prod.get("sku_id"), "coto", linea):
+        #             print(f"    [filtrado por 'incluir'] {prod['nombre']}")
+        #             continue
+        #         if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
+        #             print(f"    [filtrado por 'excluir'] {prod['nombre']}")
+        #             continue
+        #         if ean_excluido(prod.get("ean"), "coto"):
+        #             print(
+        #                 f"    [EAN excluido] "
+        #                 f"{prod.get('ean')} en coto: "
+        #                 f"{prod['nombre']}"
+        #             )
+        #             continue
+        #         fila = {
+        #             "fecha": fecha,
+        #             "linea": linea["nombre"],
+        #             "producto": prod["nombre"],
+        #             "sitio": "coto",
+        #             "precio": prod["precio"],
+        #             "disponibilidad": prod["disponibilidad"],
+        #             "error": "",
+        #             "url": prod["url"],
+        #             "ean": prod.get("ean"),
+        #             "sku": prod.get("sku_id"),
+        #         }
 
-                if fila["precio"] is None:
-                    print(
-                        f"    [sin precio, descartado] {fila['producto']} ({fila['disponibilidad']})"
-                    )
-                    continue
+        #         if fila["precio"] is None:
+        #             print(
+        #                 f"    [sin precio, descartado] {fila['producto']} ({fila['disponibilidad']})"
+        #             )
+        #             continue
 
-                if prod.get("imageurl") and (prod.get("ean") or prod.get("sku_id")):
-                    registrar_imagen(
-                        prod.get("ean"), prod.get("sku_id"), prod["imageurl"], "coto"
-                    )
+        #         if prod.get("imageurl") and (prod.get("ean") or prod.get("sku_id")):
+        #             registrar_imagen(
+        #                 prod.get("ean"), prod.get("sku_id"), prod["imageurl"], "coto"
+        #             )
 
-                filas.append(fila)
-                print(
-                    f"    -> {fila['producto']}: {fila['precio']} ({fila['disponibilidad']})"
-                )
+        #         filas.append(fila)
+        #         print(
+        #             f"    -> {fila['producto']}: {fila['precio']} ({fila['disponibilidad']})"
+        #         )
 
-        pausa_entre_pedidos()
+        # pausa_entre_pedidos()
 
-        # --- Paradineiro Farmacias ---
-        print(f"  Buscando en paradineiro...")
-        productos_paradineiro, error = buscar_productos_paradineiro(linea["busqueda"])
-        if error:
-            print(f"    [ERROR] {error}")
-            filas.append(
-                {
-                    "fecha": fecha,
-                    "linea": linea["nombre"],
-                    "producto": None,
-                    "sitio": "paradineiro",
-                    "precio": None,
-                    "disponibilidad": None,
-                    "error": error,
-                    "url": "",
-                }
-            )
-        else:
-            if not productos_paradineiro:
-                print("    (la búsqueda no devolvió ningún producto para este término)")
-            else:
-                print(
-                    f"    ({len(productos_paradineiro)} productos crudos de la búsqueda)"
-                )
+        # # --- Paradineiro Farmacias ---
+        # print(f"  Buscando en paradineiro...")
+        # productos_paradineiro, error = buscar_productos_paradineiro(linea["busqueda"])
+        # if error:
+        #     print(f"    [ERROR] {error}")
+        #     filas.append(
+        #         {
+        #             "fecha": fecha,
+        #             "linea": linea["nombre"],
+        #             "producto": None,
+        #             "sitio": "paradineiro",
+        #             "precio": None,
+        #             "disponibilidad": None,
+        #             "error": error,
+        #             "url": "",
+        #         }
+        #     )
+        # else:
+        #     if not productos_paradineiro:
+        #         print("    (la búsqueda no devolvió ningún producto para este término)")
+        #     else:
+        #         print(
+        #             f"    ({len(productos_paradineiro)} productos crudos de la búsqueda)"
+        #         )
 
-            for prod in productos_paradineiro:
-                if not pasa_filtro_inclusion(
-                    prod["nombre"], linea.get("incluir", [])
-                ) and not incluido_por_sku_forzado(
-                    prod.get("sku_id"), "paradineiro", linea
-                ):
-                    print(f"    [filtrado por 'incluir'] {prod['nombre']}")
-                    continue
-                if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
-                    print(f"    [filtrado por 'excluir'] {prod['nombre']}")
-                    continue
-                if ean_excluido(prod.get("ean"), "paradineiro"):
-                    print(
-                        f"    [EAN excluido] "
-                        f"{prod.get('ean')} en paradineiro: "
-                        f"{prod['nombre']}"
-                    )
-                    continue
-                fila = {
-                    "fecha": fecha,
-                    "linea": linea["nombre"],
-                    "producto": prod["nombre"],
-                    "sitio": "paradineiro",
-                    "precio": prod["precio"],
-                    "disponibilidad": prod["disponibilidad"],
-                    "error": "",
-                    "url": prod["url"],
-                    "ean": prod.get("ean"), 
-                    "sku": prod.get("sku_id"),
-                }
+        #     for prod in productos_paradineiro:
+        #         if not pasa_filtro_inclusion(
+        #             prod["nombre"], linea.get("incluir", [])
+        #         ) and not incluido_por_sku_forzado(
+        #             prod.get("sku_id"), "paradineiro", linea
+        #         ):
+        #             print(f"    [filtrado por 'incluir'] {prod['nombre']}")
+        #             continue
+        #         if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
+        #             print(f"    [filtrado por 'excluir'] {prod['nombre']}")
+        #             continue
+        #         if ean_excluido(prod.get("ean"), "paradineiro"):
+        #             print(
+        #                 f"    [EAN excluido] "
+        #                 f"{prod.get('ean')} en paradineiro: "
+        #                 f"{prod['nombre']}"
+        #             )
+        #             continue
+        #         fila = {
+        #             "fecha": fecha,
+        #             "linea": linea["nombre"],
+        #             "producto": prod["nombre"],
+        #             "sitio": "paradineiro",
+        #             "precio": prod["precio"],
+        #             "disponibilidad": prod["disponibilidad"],
+        #             "error": "",
+        #             "url": prod["url"],
+        #             "ean": prod.get("ean"), 
+        #             "sku": prod.get("sku_id"),
+        #         }
 
-                if fila["precio"] is None:
-                    print(
-                        f"    [sin precio, descartado] {fila['producto']}"
-                    )
-                    continue
-                if fila["disponibilidad"] == "sin_stock":
-                    print(f"    [sin stock, descartado] {fila['producto']}")
-                    continue
+        #         if fila["precio"] is None:
+        #             print(
+        #                 f"    [sin precio, descartado] {fila['producto']}"
+        #             )
+        #             continue
+        #         if fila["disponibilidad"] == "sin_stock":
+        #             print(f"    [sin stock, descartado] {fila['producto']}")
+        #             continue
 
-                if prod.get("imageurl") and (prod.get("ean") or prod.get("sku_id")):
-                    registrar_imagen(
-                        prod.get("ean"),
-                        prod.get("sku_id"),
-                        prod["imageurl"],
-                        "paradineiro",
-                    )
+        #         if prod.get("imageurl") and (prod.get("ean") or prod.get("sku_id")):
+        #             registrar_imagen(
+        #                 prod.get("ean"),
+        #                 prod.get("sku_id"),
+        #                 prod["imageurl"],
+        #                 "paradineiro",
+        #             )
 
-                filas.append(fila)
-                print(
-                    f"    -> {fila['producto']}: {fila['precio']} ({fila['disponibilidad']})"
-                )
+        #         filas.append(fila)
+        #         print(
+        #             f"    -> {fila['producto']}: {fila['precio']} ({fila['disponibilidad']})"
+        #         )
 
-        pausa_entre_pedidos()
+        # pausa_entre_pedidos()
 
-        # --- Sitios Magento (Maxiconsumo, etc.) ---
-        for sitio_magento in SITIOS_MAGENTO:
-            print(f"  Buscando en {sitio_magento['sitio']}...")
-            productos_magento, error = buscar_productos_magento(
-                sitio_magento["dominio"], sitio_magento["sucursal"], linea["busqueda"]
-            )
-            if error:
-                print(f"    [ERROR] {error}")
-                filas.append(
-                    {
-                        "fecha": fecha,
-                        "linea": linea["nombre"],
-                        "producto": None,
-                        "sitio": sitio_magento["sitio"],
-                        "precio": None,
-                        "disponibilidad": None,
-                        "error": error,
-                        "url": "",
-                    }
-                )
-                continue
+        # # --- Sitios Magento (Maxiconsumo, etc.) ---
+        # for sitio_magento in SITIOS_MAGENTO:
+        #     print(f"  Buscando en {sitio_magento['sitio']}...")
+        #     productos_magento, error = buscar_productos_magento(
+        #         sitio_magento["dominio"], sitio_magento["sucursal"], linea["busqueda"]
+        #     )
+        #     if error:
+        #         print(f"    [ERROR] {error}")
+        #         filas.append(
+        #             {
+        #                 "fecha": fecha,
+        #                 "linea": linea["nombre"],
+        #                 "producto": None,
+        #                 "sitio": sitio_magento["sitio"],
+        #                 "precio": None,
+        #                 "disponibilidad": None,
+        #                 "error": error,
+        #                 "url": "",
+        #             }
+        #         )
+        #         continue
 
-            if not productos_magento:
-                print("    (no se encontraron productos para este término)")
-            else:
-                print(f"    ({len(productos_magento)} productos crudos)")
+        #     if not productos_magento:
+        #         print("    (no se encontraron productos para este término)")
+        #     else:
+        #         print(f"    ({len(productos_magento)} productos crudos)")
 
-            for prod in productos_magento:
-                if not pasa_filtro_inclusion(
-                    prod["nombre"], linea.get("incluir", [])
-                ) and not incluido_por_sku_forzado(
-                    prod.get("sku_id"), sitio_magento["sitio"], linea
-                ):
-                    print(f"    [filtrado por 'incluir'] {prod['nombre']}")
-                    continue
-                if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
-                    print(f"    [filtrado por 'excluir'] {prod['nombre']}")
-                    continue
-                if sku_excluido(prod.get("sku_id"), sitio_magento["sitio"]):
-                    print(
-                        f"    [SKU excluido] "
-                        f"{prod.get('sku_id')} en {sitio_magento['sitio']}: "
-                        f"{prod['nombre']}"
-                    )
-                    continue
+        #     for prod in productos_magento:
+        #         if not pasa_filtro_inclusion(
+        #             prod["nombre"], linea.get("incluir", [])
+        #         ) and not incluido_por_sku_forzado(
+        #             prod.get("sku_id"), sitio_magento["sitio"], linea
+        #         ):
+        #             print(f"    [filtrado por 'incluir'] {prod['nombre']}")
+        #             continue
+        #         if not pasa_filtro_exclusion(prod["nombre"], linea["excluir"]):
+        #             print(f"    [filtrado por 'excluir'] {prod['nombre']}")
+        #             continue
+        #         if sku_excluido(prod.get("sku_id"), sitio_magento["sitio"]):
+        #             print(
+        #                 f"    [SKU excluido] "
+        #                 f"{prod.get('sku_id')} en {sitio_magento['sitio']}: "
+        #                 f"{prod['nombre']}"
+        #             )
+        #             continue
 
-                fila = {
-                    "fecha": fecha,
-                    "linea": linea["nombre"],
-                    "producto": prod["nombre"],
-                    "sitio": sitio_magento["sitio"],
-                    "precio": prod["precio"],
-                    "disponibilidad": prod["disponibilidad"],
-                    "error": "",
-                    "url": prod["url"],
-                    "ean": prod.get("ean"),  # siempre None por ahora
-                    "sku": prod.get("sku_id"),
-                }
+        #         fila = {
+        #             "fecha": fecha,
+        #             "linea": linea["nombre"],
+        #             "producto": prod["nombre"],
+        #             "sitio": sitio_magento["sitio"],
+        #             "precio": prod["precio"],
+        #             "disponibilidad": prod["disponibilidad"],
+        #             "error": "",
+        #             "url": prod["url"],
+        #             "ean": prod.get("ean"),  # siempre None por ahora
+        #             "sku": prod.get("sku_id"),
+        #         }
 
-                if fila["precio"] is None:
-                    print(f"    [sin precio, descartado] {fila['producto']}")
-                    continue
-                if fila["disponibilidad"] == "sin_stock":
-                    print(f"    [sin stock, descartado] {fila['producto']}")
-                    continue
+        #         if fila["precio"] is None:
+        #             print(f"    [sin precio, descartado] {fila['producto']}")
+        #             continue
+        #         if fila["disponibilidad"] == "sin_stock":
+        #             print(f"    [sin stock, descartado] {fila['producto']}")
+        #             continue
 
-                # Maxiconsumo no expone EAN, pero sí trae imagen y SKU
-                # propio en el listado: se registra igual, cacheada
-                # como "sitio::sku" para que quede atada a este mismo
-                # producto de este mismo sitio.
-                imagen_prod = resolver_imagen(
-                    prod.get("imageurl"), prod.get("url")
-                )
+        #         # Maxiconsumo no expone EAN, pero sí trae imagen y SKU
+        #         # propio en el listado: se registra igual, cacheada
+        #         # como "sitio::sku" para que quede atada a este mismo
+        #         # producto de este mismo sitio.
+        #         imagen_prod = resolver_imagen(
+        #             prod.get("imageurl"), prod.get("url")
+        #         )
 
-                if imagen_prod and prod.get("sku_id"):
-                    registrar_imagen(
-                        None,
-                        prod.get("sku_id"),
-                        imagen_prod,
-                        sitio_magento["sitio"],
-                    )
+        #         if imagen_prod and prod.get("sku_id"):
+        #             registrar_imagen(
+        #                 None,
+        #                 prod.get("sku_id"),
+        #                 imagen_prod,
+        #                 sitio_magento["sitio"],
+        #             )
 
-                filas.append(fila)
-                print(
-                    f"    -> {fila['producto']}: {fila['precio']} ({fila['disponibilidad']})"
-                )
+        #         filas.append(fila)
+        #         print(
+        #             f"    -> {fila['producto']}: {fila['precio']} ({fila['disponibilidad']})"
+        #         )
 
-            pausa_entre_pedidos()
+        #     pausa_entre_pedidos()
 
-    try:
-        escribir_en_google_sheets(filas)
-    except Exception as e:
-        print(f"\n[ERROR subiendo a Google Sheets]: {type(e).__name__}: {e}")
+    # try:
+    #     escribir_en_google_sheets(filas)
+    # except Exception as e:
+    #     print(f"\n[ERROR subiendo a Google Sheets]: {type(e).__name__}: {e}")
 
-    try:
+    # try:
 
-        if planilla is None:
-            creds = obtener_credenciales_google()
-            cliente = gspread.authorize(creds)
-            planilla = cliente.open_by_key(SPREADSHEET_ID)
+    #     if planilla is None:
+    #         creds = obtener_credenciales_google()
+    #         cliente = gspread.authorize(creds)
+    #         planilla = cliente.open_by_key(SPREADSHEET_ID)
 
-        guardar_nuevas_imagenes(planilla)
+    #     guardar_nuevas_imagenes(planilla)
 
-    except Exception as e:
+    # except Exception as e:
 
-        print(f"\n[ERROR guardando imágenes]: " f"{type(e).__name__}: {e}")
+    #     print(f"\n[ERROR guardando imágenes]: " f"{type(e).__name__}: {e}")
 
     
 if __name__ == "__main__":
