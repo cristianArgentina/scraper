@@ -1,5 +1,7 @@
 """Obtención, validación y registro de imágenes de producto (sin tocar Google Sheets)."""
 
+import threading
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -35,6 +37,10 @@ CLAVES_IMAGEN_PROCESADAS = set()
 
 # Nuevas imágenes que se subirán a Google Sheets al finalizar.
 NUEVAS_IMAGENES = []
+
+# Protege las tres estructuras de arriba: los scrapers corren en hilos
+# distintos (uno por sitio) y las tocan a través de registrar_imagen().
+_LOCK_IMAGENES = threading.Lock()
 
 
 def es_url_imagen_valida(url):
@@ -228,6 +234,41 @@ def obtener_imagen_de_pagina(url):
     return None
 
 
+def copiar_nuevas_imagenes(desde):
+    """Devuelve (imágenes nuevas desde la posición `desde`, posición actual).
+    Usado por el guardado parcial para ir volcando solo lo que falta."""
+    with _LOCK_IMAGENES:
+        return list(NUEVAS_IMAGENES[desde:]), len(NUEVAS_IMAGENES)
+
+
+def restaurar_imagenes(items, pendientes_de_subir=True):
+    """Vuelve a cargar imágenes de una corrida anterior (reanudación).
+
+    Siempre quedan como "ya conocidas" para no volver a pedirlas. Si todavía
+    no se habían subido a Google Sheets, además vuelven a la lista de nuevas.
+    """
+    with _LOCK_IMAGENES:
+        for item in items:
+            clave = clave_imagen(item.get("ean"), item.get("sku"), item.get("fuente"))
+            if not clave:
+                continue
+            # Si ya figura en la caché cargada desde Sheets, ya se subió
+            # (p. ej. la corrida se cortó justo antes de marcarlo).
+            ya_en_sheets = clave in CACHE_IMAGENES
+            CLAVES_IMAGEN_PROCESADAS.add(clave)
+            CACHE_IMAGENES.setdefault(
+                clave,
+                {
+                    "imageurl": item["imageurl"],
+                    "fuente": item.get("fuente"),
+                    "ean": item.get("ean", ""),
+                    "sku": item.get("sku", ""),
+                },
+            )
+            if pendientes_de_subir and not ya_en_sheets:
+                NUEVAS_IMAGENES.append(item)
+
+
 def registrar_imagen(ean, sku, imageurl, fuente):
     """
     Registra la imagen de un producto en la caché.
@@ -248,37 +289,38 @@ def registrar_imagen(ean, sku, imageurl, fuente):
     if not clave:
         return False
 
-    # Ya existe en Google Sheets.
-    if clave in CACHE_IMAGENES:
-        return False
-
-    # Ya conseguimos una imagen durante esta corrida.
-    if clave in CLAVES_IMAGEN_PROCESADAS:
-        return False
-
-    CLAVES_IMAGEN_PROCESADAS.add(clave)
-
     ean = str(ean).strip() if ean else ""
     sku = str(sku).strip() if sku else ""
 
-    registro = {
-        "imageurl": imageurl.strip(),
-        "fuente": fuente,
-        "ean": ean,
-        "sku": sku,
-    }
+    # El chequeo y el alta van juntos bajo un lock: con un hilo por sitio,
+    # dos comercios pueden traer el mismo EAN al mismo tiempo.
+    with _LOCK_IMAGENES:
+        # Ya existe en Google Sheets.
+        if clave in CACHE_IMAGENES:
+            return False
 
-    CACHE_IMAGENES[clave] = registro
+        # Ya conseguimos una imagen durante esta corrida.
+        if clave in CLAVES_IMAGEN_PROCESADAS:
+            return False
 
-    NUEVAS_IMAGENES.append(
-        {
-            "ean": ean,
-            "sku": sku,
-            "sitio": fuente,
+        CLAVES_IMAGEN_PROCESADAS.add(clave)
+
+        CACHE_IMAGENES[clave] = {
             "imageurl": imageurl.strip(),
             "fuente": fuente,
+            "ean": ean,
+            "sku": sku,
         }
-    )
+
+        NUEVAS_IMAGENES.append(
+            {
+                "ean": ean,
+                "sku": sku,
+                "sitio": fuente,
+                "imageurl": imageurl.strip(),
+                "fuente": fuente,
+            }
+        )
 
     if ean:
         print(f"    [IMAGEN NUEVA] EAN {ean} → {fuente}")

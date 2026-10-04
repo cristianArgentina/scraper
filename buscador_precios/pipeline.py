@@ -140,8 +140,17 @@ def _procesar(linea, scraper, fecha):
 
 
 def procesar_linea_en_scraper(linea, scraper, fecha):
-    """Procesa una línea en un comercio y devuelve las filas a guardar."""
-    filas = _procesar(linea, scraper, fecha)
+    """Procesa una línea en un comercio y devuelve las filas a guardar.
+
+    Cualquier excepción no prevista se convierte en una fila de error, para
+    que la falla de un sitio no frene a los demás (cada uno corre en su hilo).
+    """
+    try:
+        filas = _procesar(linea, scraper, fecha)
+    except Exception as e:
+        error = f"excepción no controlada: {type(e).__name__}: {e}"
+        print(f"    [ERROR] {error}")
+        filas = [_fila_error(fecha, linea, scraper, error)]
 
     if scraper.pausa_tras_sitio:
         pausa_entre_pedidos()

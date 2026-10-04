@@ -1,8 +1,16 @@
 """Configuración general: credenciales, planilla, headers HTTP, zona horaria."""
 
+import os
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 ZONA_HORARIA = ZoneInfo("America/Argentina/Buenos_Aires")
+
+# Dónde se guarda el avance de cada corrida (ver core/checkpoint.py).
+DIRECTORIO_CORRIDAS = Path(
+    os.environ.get("DIRECTORIO_CORRIDAS")
+    or Path(__file__).resolve().parent.parent / "corridas"
+)
 
 
 # -----------------------------------------------------------------------
