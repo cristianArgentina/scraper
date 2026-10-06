@@ -164,3 +164,24 @@ SITIOS_MAGENTO = [
 
 MAX_PAGINAS_MAGENTO = 5  # 5 páginas x 12 = hasta 60 productos por término
 PRODUCTOS_POR_PAGINA_MAGENTO = 12  # tamaño de página fijo de Maxiconsumo
+
+# -----------------------------------------------------------------------
+# SITIOS PRESTASHOP (Maxidescuento, y cualquier otro PrestaShop 1.7).
+#
+# Igual que en Magento, el precio final viene en el HTML del listado de
+# búsqueda (no hace falta simular checkout), pero acá el listado SÍ expone
+# EAN (meta itemprop="gtin13") y SKU (data-id-product). El precio que se
+# guarda es el que muestra el sitio, ya con el descuento aplicado si el
+# producto está en oferta. Un producto sin stock aparece en el listado sin
+# precio, y el pipeline lo descarta.
+# "ruta_busqueda": ruta del buscador del sitio (por defecto "/busqueda").
+# -----------------------------------------------------------------------
+SITIOS_PRESTASHOP = [
+    {
+        "sitio": "maxidescuento",
+        "dominio": "www.maxidescuento.com.ar",
+        "ruta_busqueda": "/busqueda",
+    },
+]
+
+MAX_PAGINAS_PRESTASHOP = 5  # páginas de hasta 54 productos por término

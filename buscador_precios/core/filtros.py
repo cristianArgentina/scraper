@@ -57,8 +57,14 @@ def sku_excluido(sku, sitio):
     return sku in skus_comercio
 
 
+def _normalizar_medidas(nombre: str) -> str:
+    r"""Algunos sitios (Maxidescuento) escriben 'ML' sin la L: 'X200M', 'X 400M'.
+    Se pasa a '200 ml' para que patrones como r'200\s*(ml|cc)' lo detecten."""
+    return re.sub(r"(?<!\d)(\d+)\s*m\b", r"\1 ml", nombre, flags=re.IGNORECASE)
+
+
 def pasa_filtro_exclusion(nombre: str, excluir: list):
-    nombre_str = nombre or ""
+    nombre_str = _normalizar_medidas(nombre or "")
     todos_los_patrones = list(excluir) + EXCLUIR_GLOBAL
     return not any(
         re.search(patron, nombre_str, re.IGNORECASE) for patron in todos_los_patrones

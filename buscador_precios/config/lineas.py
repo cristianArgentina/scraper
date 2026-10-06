@@ -20,7 +20,7 @@ LINEAS = [
     {
         "nombre": "Dove Bond Repair",
         "busqueda": "dove-bond-repair",
-        "busqueda_por_sitio": {"perfumeriaspigmento": "bond-repair"},
+        "busqueda_por_sitio": {"perfumeriaspigmento": "bond-repair", "maxidescuento": "bond"},
         "incluir": ["bond"],
         # SKU 22781 en Maxiconsumo: "ACONDICIONADOR DOVE REPAIR 250 ML".
         # El nombre no dice "bond" pero es el producto de la línea Bond
@@ -32,8 +32,8 @@ LINEAS = [
     {
         "nombre": "Dove UV Repair",
         "busqueda": "dove-uv-repair",
-        "busqueda_por_sitio": {"perfumeriaspigmento": "uv-repair"},
-        "incluir": [r"uv\s*repair", r"reparaci[oó]n\s*y\s*brillo"],
+        "busqueda_por_sitio": {"perfumeriaspigmento": "uv-repair", "maxidescuento": "uv repair"},
+        "incluir": [r"uv\s*repair", r"reparaci[oó]n\s*y\s*brillo", r"repair.*uv\s*glow"],
         "excluir": [r"200\s*(ml|cc)"],
     },
     {
@@ -51,6 +51,7 @@ LINEAS = [
     {
         "nombre": "Cicatricure",
         "busqueda": ["cicatricure-400", "cicatricure-age-care", "cicatricure-gel-60"],
+        "busqueda_por_sitio": {"maxidescuento": "cicatricure"},        
         "incluir": ["cicatricure"],
         "excluir": [
             r"\bporcelana\b",
@@ -65,12 +66,14 @@ LINEAS = [
     {
         "nombre": "DiabetTX / Goicoechea 400",
         "busqueda": ["diabettx-400", "goicoechea-400"],
+        "busqueda_por_sitio": {"maxidescuento": ["diabettx", "goicoechea"]},
         "incluir": ["diabettx", "goicoechea"],
         "excluir": [],
     },
     {
         "nombre": "Nivea Creme 150",
         "busqueda": "nivea-creme-150",
+        "busqueda_por_sitio": {"maxidescuento": "creme lata"},
         "incluir": [r"(?=.*creme)(?=.*150)"],
         "excluir": [],
     },
@@ -81,6 +84,6 @@ LINEAS = [
         # 650ml y 190ml existen como presentaciones de Sedal y no se
         # quieren (confirmado). El resto de tamaños (300ml, 340ml, etc.)
         # sí quedan.
-        "excluir": [r"650\s*(ml|cc)", r"190\s*(ml|cc)"],
+        "excluir": [r"650\s*(ml|cc)", r"190\s*(ml|cc)", r"doyp"],
     },
 ]

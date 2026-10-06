@@ -1,10 +1,11 @@
 """Registro de scrapers. Para sumar un comercio: crear su clase y agregarla acá."""
 import os
 
-from config.sitios import SITIOS_MAGENTO, SITIOS_VTEX
+from config.sitios import SITIOS_MAGENTO, SITIOS_PRESTASHOP, SITIOS_VTEX
 from scrapers.coto import ScraperCoto
 from scrapers.magento import ScraperMagento
 from scrapers.paradineiro import ScraperParadineiro
+from scrapers.prestashop import ScraperPrestashop
 from scrapers.vtex import ScraperVtex
 
 
@@ -14,6 +15,7 @@ def construir_scrapers():
         [ScraperVtex(cfg) for cfg in SITIOS_VTEX]
         + [ScraperCoto(), ScraperParadineiro()]
         + [ScraperMagento(cfg) for cfg in SITIOS_MAGENTO]
+        + [ScraperPrestashop(cfg) for cfg in SITIOS_PRESTASHOP]
     )
 
     # Para pruebas: SOLO_SITIOS=vea  (o varios: SOLO_SITIOS=vea,coto)
