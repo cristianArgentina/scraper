@@ -169,7 +169,15 @@ def buscar_productos_magento(dominio: str, sucursal: str, busqueda):
                     break
 
                 pausa_entre_pedidos()
-
+            
+            else:
+                # el bucle terminó sin "break": la última página vino completa
+                print(
+                    f"    [AVISO] '{termino}': la última página vino completa; "
+                    f"puede haber más productos sin traer "
+                    f"(MAX_PAGINAS_MAGENTO={MAX_PAGINAS_MAGENTO})"
+                )
+                
             CACHE_BUSQUEDA[clave_cache] = productos_termino
             pausa_entre_pedidos()
 

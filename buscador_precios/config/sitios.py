@@ -130,7 +130,7 @@ PARADINEIRO_SEARCH_URL = "https://www.paradineirofarmacias.com.ar/shop"
 PARADINEIRO_DOMINIO = "https://www.paradineirofarmacias.com.ar"
 
 PRODUCTOS_POR_PAGINA_VTEX = 40
-MAX_PAGINAS_VTEX = 3
+MAX_PAGINAS_VTEX = 7
 
 # -----------------------------------------------------------------------
 # SITIOS MAGENTO (Maxiconsumo, y cualquier otro sitio Magento que se
@@ -162,7 +162,7 @@ SITIOS_MAGENTO = [
     },
 ]
 
-MAX_PAGINAS_MAGENTO = 5  # 5 páginas x 12 = hasta 60 productos por término
+MAX_PAGINAS_MAGENTO = 7  # 5 páginas x 12 = hasta 60 productos por término
 PRODUCTOS_POR_PAGINA_MAGENTO = 12  # tamaño de página fijo de Maxiconsumo
 
 # -----------------------------------------------------------------------

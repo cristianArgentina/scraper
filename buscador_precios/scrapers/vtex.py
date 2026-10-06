@@ -54,18 +54,13 @@ def buscar_productos_vtex(dominio, busqueda):
                 )
 
                 try:
-                    resp = request_con_reintentos(
-                        "GET",
-                        url,
-                        headers=HEADERS
-                    )
+                    resp = request_con_reintentos("GET", url, headers=HEADERS)
                     resp.raise_for_status()
                     data = resp.json()
 
                 except Exception as e:
                     return None, (
-                        f"error de búsqueda ('{termino}', "
-                        f"página {pagina + 1}): {e}"
+                        f"error de búsqueda ('{termino}', " f"página {pagina + 1}): {e}"
                     )
 
                 print(
@@ -106,7 +101,14 @@ def buscar_productos_vtex(dominio, busqueda):
 
                 # Evita hacer consultas consecutivas demasiado rápido.
                 pausa_entre_pedidos()
-
+                
+            else:
+                # el bucle terminó sin "break": la última página vino completa
+                print(
+                    f"    [AVISO] '{termino}': la última página vino completa; "
+                    f"puede haber más productos sin traer (MAX_PAGINAS_VTEX={MAX_PAGINAS_VTEX})"
+                )
+                
             CACHE_BUSQUEDA[clave_cache] = productos_termino
 
             # Mantener la pausa que ya tenía el buscador
@@ -133,7 +135,7 @@ def obtener_precio_css(url: str):
         return {"error": f"error de conexión: {e}"}
 
     soup = BeautifulSoup(resp.text, "html.parser")
-     
+
     contenedor = soup.select_one(".vtex-product-price-1-x-sellingPrice")
     if contenedor is None:
         return {"error": "no se encontró el contenedor de precio"}
@@ -179,7 +181,7 @@ def obtener_precio_simulacion_promo_2u(
 
     if disponible != "available":
         return {"precio": None, "disponibilidad": disponible or "desconocida"}
-    
+
     for item in items:
         precio_venta = item.get("sellingPrice")
         cantidad = item.get("quantity", 1)
@@ -203,6 +205,7 @@ def obtener_precio_simulacion_promo_2u(
         "precio": precio_por_unidad,
         "disponibilidad": f"promo: {nombre_promo}" if nombre_promo else disponible,
     }
+
 
 # -----------------------------------------------------------------------
 # PROMOCIONES PROPIAS DE LA TIENDA (ej. Vea: POST /_v/search-promotions)
@@ -280,6 +283,7 @@ def consultar_promociones_tienda(dominio: str, cfg_promos: dict, skus: list):
 
     return resultado
 
+
 class ScraperVtex(Scraper):
     pausa_por_producto = True
 
@@ -295,7 +299,7 @@ class ScraperVtex(Scraper):
             for prod in productos:
                 prod["url"] = prod.get("link", "")
         return productos, error
-    
+
     def preparar(self, productos):
         """Trae las promos propias de la tienda (si el sitio las tiene
         configuradas) solo para los productos que pasaron los filtros."""
@@ -321,8 +325,7 @@ class ScraperVtex(Scraper):
 
     def pre_descarte(self, prod):
         if self.cfg.get("verificar_stock_catalogo") and (
-            prod.get("stock_catalogo") == 0
-            or prod.get("disponible_catalogo") is False
+            prod.get("stock_catalogo") == 0 or prod.get("disponible_catalogo") is False
         ):
             return "sin stock en catálogo, descartado"
         return None
