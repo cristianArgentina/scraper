@@ -25,6 +25,46 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Test acceso Maxi Descuento
+        run: |
+          echo "=== Test 1: curl básico ==="
+          curl -I -L --max-time 20 \
+            "https://www.maxidescuento.com.ar/busqueda?controller=search&s=bond" \
+            || true
+      
+          echo ""
+          echo "=== Test 2: curl con User-Agent de navegador ==="
+          curl -I -L --max-time 20 \
+            -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36" \
+            -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" \
+            -H "Accept-Language: es-AR,es;q=0.9,en;q=0.8" \
+            "https://www.maxidescuento.com.ar/busqueda?controller=search&s=bond" \
+            || true
+
+      - name: Test requests contra Maxi Descuento
+        run: |
+          python - <<'PY'
+          import requests
+      
+          url = "https://www.maxidescuento.com.ar/busqueda?controller=search&s=bond"
+      
+          headers = {
+              "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
+          }
+      
+          r = requests.get(url, headers=headers, timeout=15)
+      
+          print("Status:", r.status_code)
+          print("Server:", r.headers.get("server"))
+          print("Content-Type:", r.headers.get("content-type"))
+          print("Content-Length:", r.headers.get("content-length"))
+          print("URL final:", r.url)
+          print("Primeros 500 caracteres:")
+          print(r.text[:500])
+          PY
+
       - name: Ejecutar buscador de precios
         working-directory: buscador_precios
         env:
