@@ -35,6 +35,8 @@ Enter con la línea vacía termina el script.
 """
 
 import gspread
+import re
+import unicodedata
 
 from unificar_grupos import (
     SPREADSHEET_ID,
@@ -50,49 +52,288 @@ from unificar_grupos import (
 # -----------------------------------------------------------------------
 # PEDIR IDENTIFICADORES AL USUARIO
 # -----------------------------------------------------------------------
+def normalizar_texto(texto):
+    """Normaliza texto para comparar nombres de comercios sin importar
+    mayúsculas, espacios, acentos o signos."""
+    texto = str(texto).strip().lower()
+
+    texto = unicodedata.normalize("NFD", texto)
+    texto = "".join(
+        c for c in texto
+        if unicodedata.category(c) != "Mn"
+    )
+
+    return re.sub(r"[^a-z0-9]", "", texto)
+
+
+def formatear_identificador_amigable(identificador):
+    """
+    Convierte el identificador interno al formato que ve el usuario
+    en el frontend.
+
+    ean:7791293050577
+        -> EAN 7791293050577
+
+    sku:maxiconsumo:28361
+        -> SKU 28361 (Maxiconsumo)
+    """
+    identificador = str(identificador).strip()
+
+    if identificador.lower().startswith("ean:"):
+        return f"EAN {identificador[4:]}"
+
+    match = re.match(
+        r"^sku:([^:]+):(.+)$",
+        identificador,
+        re.IGNORECASE
+    )
+
+    if match:
+        sitio = match.group(1)
+        sku = match.group(2)
+
+        # Para la mayoría de los comercios el ID interno ya coincide
+        # con el nombre que muestra el frontend.
+        nombre_comercio = sitio.replace("_", " ").replace("-", " ").strip()
+
+        # Capitalización más agradable:
+        nombre_comercio = nombre_comercio.title()
+
+        return f"SKU {sku} ({nombre_comercio})"
+
+    return identificador
+
+
+def resolver_identificador_amigable(entrada, registros):
+    """
+    Convierte lo que escribe/pega el usuario al identificador interno.
+
+    Acepta:
+
+        EAN 7791293050577
+        ean:7791293050577
+
+        SKU 28361 (Maxiconsumo)
+        sku:maxiconsumo:28361
+
+    También intenta resolver el nombre del comercio aunque haya
+    diferencias de mayúsculas, espacios, guiones o acentos.
+    """
+
+    entrada = str(entrada).strip()
+
+    if not entrada:
+        return None
+
+    # ---------------------------------------------------------
+    # 1. Ya viene en formato interno: lo dejamos pasar.
+    # ---------------------------------------------------------
+    if re.match(r"^ean:[^:]+$", entrada, re.IGNORECASE):
+        candidato = entrada.lower()
+
+        if candidato in registros:
+            return candidato
+
+        return None
+
+    if re.match(r"^sku:[^:]+:.+$", entrada, re.IGNORECASE):
+        candidato = entrada.lower()
+
+        if candidato in registros:
+            return candidato
+
+        return None
+
+    # ---------------------------------------------------------
+    # 2. EAN amigable
+    #    Ej: EAN 7791293050577
+    # ---------------------------------------------------------
+    match_ean = re.match(
+        r"^ean\s*[:\-]?\s*(\d+)$",
+        entrada,
+        re.IGNORECASE
+    )
+
+    if match_ean:
+        numero = match_ean.group(1)
+
+        candidato = f"ean:{numero}".lower()
+
+        if candidato in registros:
+            return candidato
+
+        # Por si los registros no están en minúsculas
+        for identificador in registros:
+            if str(identificador).lower() == candidato:
+                return identificador
+
+        return None
+
+    # ---------------------------------------------------------
+    # 3. SKU amigable
+    #    Ej: SKU 28361 (Maxiconsumo)
+    # ---------------------------------------------------------
+    match_sku = re.match(
+        r"^sku\s*[:\-]?\s*(.+?)\s*\(\s*(.+?)\s*\)\s*$",
+        entrada,
+        re.IGNORECASE
+    )
+
+    if match_sku:
+        sku = match_sku.group(1).strip()
+        comercio = match_sku.group(2).strip()
+
+        comercio_normalizado = normalizar_texto(comercio)
+
+        candidatos = []
+
+        for identificador in registros:
+            identificador_str = str(identificador).strip()
+
+            match_interno = re.match(
+                r"^sku:([^:]+):(.+)$",
+                identificador_str,
+                re.IGNORECASE
+            )
+
+            if not match_interno:
+                continue
+
+            sitio = match_interno.group(1)
+            sku_interno = match_interno.group(2)
+
+            # El SKU debe coincidir exactamente
+            if sku_interno.lower() != sku.lower():
+                continue
+
+            sitio_normalizado = normalizar_texto(sitio)
+
+            # Maxiconsumo == maxiconsumo
+            # Farma Online == farmaonline
+            # etc.
+            if sitio_normalizado == comercio_normalizado:
+                candidatos.append(identificador_str)
+
+        if len(candidatos) == 1:
+            return candidatos[0]
+
+        if len(candidatos) > 1:
+            return candidatos
+
+        return None
+
+    return None
+
+
 def pedir_identificadores(registros):
     """
-    Pide identificadores separados por coma hasta conseguir un conjunto
-    válido (2 o más, todos existentes en 'registros'), o hasta que el
-    usuario decide terminar con una línea vacía.
+    Solicita identificadores de manera amigable.
 
-    Devuelve la lista de identificadores (sin duplicados, en el orden
-    ingresado), o None si el usuario quiere salir.
+    Se pueden pegar:
+        EAN 7791293050577
+        SKU 28361 (Maxiconsumo)
+
+    Uno por línea o separados por coma.
+
+    También sigue aceptando el formato interno anterior por
+    compatibilidad.
     """
+
+    print()
+    print("─" * 70)
+    print("IDENTIFICADORES")
+    print("─" * 70)
+    print("Pegá los identificadores tal como aparecen en el frontend.")
+    print()
+    print("Ejemplos:")
+    print("  EAN 7791293050577")
+    print("  SKU 28361 (Maxiconsumo)")
+    print()
+    print("Podés pegar varios, uno por línea o separados por coma.")
+    print("No hace falta escribir ningún ':'")
+    print()
+
     while True:
-        print("\nIngresá los identificadores a unificar, separados por coma")
-        print("(ej: ean:7791293050577, sku:maxiconsumo:11094)")
-        print("Dejá vacío y Enter para terminar.")
-        linea = input("> ").strip()
+        entrada = input("Identificadores: ").strip()
 
-        if not linea:
-            return None
-
-        crudos = [p.strip() for p in linea.split(",") if p.strip()]
-
-        faltantes = [i for i in crudos if i not in registros]
-        if faltantes:
-            print("  ⚠️  No encontrado en Match_Productos:")
-            for f in faltantes:
-                print(f"      - {f}")
-            print(
-                "  Revisá que estén bien escritos (copiá y pegá de la columna "
-                "'identificador')."
-            )
+        if not entrada:
+            print("No se ingresaron identificadores.")
             continue
 
-        vistos = set()
+        # -----------------------------------------------------
+        # Permitir varias líneas y también comas.
+        # -----------------------------------------------------
+        partes = []
+
+        for linea in entrada.splitlines():
+            partes.extend(linea.split(","))
+
+        partes = [
+            parte.strip()
+            for parte in partes
+            if parte.strip()
+        ]
+
         identificadores = []
-        for i in crudos:
-            if i not in vistos:
-                vistos.add(i)
-                identificadores.append(i)
 
-        if len(identificadores) < 2:
-            print("  ⚠️  Necesitás al menos 2 identificadores distintos.")
-            continue
+        for parte in partes:
+            resultado = resolver_identificador_amigable(
+                parte,
+                registros
+            )
 
-        return identificadores
+            # No encontrado
+            if resultado is None:
+                print()
+                print(f"⚠️  No encontré: {parte}")
+                print(
+                    "    Verificá que esté escrito igual que "
+                    "en el frontend."
+                )
+                continue
+
+            # Ambiguo
+            if isinstance(resultado, list):
+                print()
+                print(f"⚠️  El identificador es ambiguo: {parte}")
+                print("    Encontré varias coincidencias:")
+
+                for candidato in resultado:
+                    print(
+                        f"      - "
+                        f"{formatear_identificador_amigable(candidato)}"
+                    )
+
+                print(
+                    "    Especificá mejor el comercio."
+                )
+                continue
+
+            if resultado not in identificadores:
+                identificadores.append(resultado)
+
+        if identificadores:
+            print()
+            print("Identificadores reconocidos:")
+
+            for identificador in identificadores:
+                print(
+                    f"  ✓ {formatear_identificador_amigable(identificador)}"
+                )
+
+            print()
+
+            confirmar = input(
+                "¿Son correctos? [Enter = sí / n = volver a ingresar]: "
+            ).strip().lower()
+
+            if confirmar in ("", "s", "si", "sí"):
+                return identificadores
+
+        else:
+            print()
+            print("No se pudo reconocer ningún identificador.")
+            print("Intentá nuevamente.")
 
 
 # -----------------------------------------------------------------------

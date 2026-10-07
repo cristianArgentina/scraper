@@ -174,6 +174,44 @@ def buscar_productos_paradineiro(busqueda):
 
                 sin_stock = "SIN STOCK" in li.get_text().upper()
 
+
+                disponibilidad = "sin_stock" if sin_stock else "available"
+ 
+                # -----------------------------------------------------
+                # PROMO 2x1
+                #
+                # La tarjeta muestra el precio de UNA unidad y, aparte,
+                # una etiqueta "2x1" (span.promotion_label-short-title).
+                # Llevando 2 se paga una: el precio por unidad es la mitad,
+                # igual que en VTEX (promedio de 2 unidades) y Vea (50%).
+                #
+                # Solo se interpreta el patrón "NxM". Las etiquetas de
+                # descuento directo ("-25%") NO se tocan: ese precio ya
+                # viene con el descuento aplicado y se descontaría dos veces.
+                # -----------------------------------------------------
+ 
+                if precio is not None and not sin_stock:
+                    for etiqueta in li.select(".promotion_label-short-title"):
+                        texto_promo = etiqueta.get_text(strip=True)
+                        m_promo = re.fullmatch(
+                            r"(\d+)\s*x\s*(\d+)", texto_promo, re.IGNORECASE
+                        )
+                        if not m_promo:
+                            continue
+ 
+                        if (int(m_promo.group(1)), int(m_promo.group(2))) == (2, 1):
+                            precio = round(precio / 2, 2)
+                            disponibilidad = f"promo: {texto_promo}"
+                        else:
+                            # 3x2, 4x3...: exigen comprar más de 2 unidades,
+                            # no se aplican (se avisa para poder revisarlo).
+                            print(
+                                f"[PROMO NO APLICADA] Paradineiro: "
+                                f"'{texto_promo}' en {nombre}"
+                            )
+                        break
+ 
+
                 # -----------------------------------------------------
                 # IMAGEN
                 # -----------------------------------------------------
@@ -215,7 +253,7 @@ def buscar_productos_paradineiro(busqueda):
                         "sku_id": producto_id,
                         "nombre": nombre,
                         "precio": precio,
-                        "disponibilidad": ("sin_stock" if sin_stock else "available"),
+                        "disponibilidad": disponibilidad,
                         "url": link,
                         "imageurl": imagen_url,
                         "ean": ean,

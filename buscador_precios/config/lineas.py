@@ -62,7 +62,7 @@ LINEAS = [
     {
         "nombre": "Cicatricure",
         "busqueda": ["cicatricure-400", "cicatricure-age-care", "cicatricure-gel-60"],
-        "busqueda_por_sitio": {"maxidescuento": "cicatricure"},
+        "busqueda_por_sitio": {"maxidescuento": "cicatricure", "paradineiro": "cicatricure"},
         "incluir": ["cicatricur"],
         "excluir": [
             r"\bporcelana\b",
@@ -77,14 +77,14 @@ LINEAS = [
     {
         "nombre": "DiabetTX / Goicoechea 400",
         "busqueda": ["diabettx-400", "goicoechea-400"],
-        "busqueda_por_sitio": {"maxidescuento": ["diabettx", "goicoechea"]},
+        "busqueda_por_sitio": {"maxidescuento": ["diabettx", "goicoechea"], "paradineiro": "goicoechea"},
         "incluir": ["diabettx", "goicoechea"],
         "excluir": [],
     },
     {
         "nombre": "Nivea Creme 150",
         "busqueda": "nivea-creme-150",
-        "busqueda_por_sitio": {"maxidescuento": "creme lata", "paradineiro": "creme lata 150"},
+        "busqueda_por_sitio": {"maxidescuento": "creme lata", "paradineiro": "creme lata"},
         "incluir": [r"(?=.*creme)(?=.*150)"],
         "excluir": [],
     },
