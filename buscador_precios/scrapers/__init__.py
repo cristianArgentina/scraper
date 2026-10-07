@@ -15,8 +15,16 @@ def construir_scrapers():
         [ScraperVtex(cfg) for cfg in SITIOS_VTEX]
         + [ScraperCoto(), ScraperParadineiro()]
         + [ScraperMagento(cfg) for cfg in SITIOS_MAGENTO]
-        + [ScraperPrestashop(cfg) for cfg in SITIOS_PRESTASHOP]
     )
+
+    # Maxidescuento (PrestaShop) bloquea las IPs de GitHub Actions con un 403
+    # de Apache. Corriendo ahí se omite; en local sigue funcionando.
+    # INCLUIR_PRESTASHOP=1 fuerza incluirlo igual (para probar).
+    en_actions = os.environ.get("GITHUB_ACTIONS") == "true"
+    if not en_actions or os.environ.get("INCLUIR_PRESTASHOP") == "1":
+        todos += [ScraperPrestashop(cfg) for cfg in SITIOS_PRESTASHOP]
+    else:
+        print("[AVISO] Corrida en GitHub Actions: se omite PrestaShop (maxidescuento).")
 
     # Para pruebas: SOLO_SITIOS=vea  (o varios: SOLO_SITIOS=vea,coto)
     solo = os.environ.get("SOLO_SITIOS")
