@@ -65,6 +65,17 @@ jobs:
           print(r.text[:500])
           PY
 
+      - name: Test curl_cffi (huella de navegador)
+        run: |
+          pip install curl_cffi
+          python - <<'PY'
+          from curl_cffi import requests
+          url = "https://www.maxidescuento.com.ar/busqueda?controller=search&s=bond"
+          for perfil in ("chrome", "firefox"):
+              r = requests.get(url, impersonate=perfil, timeout=15)
+              print(perfil, r.status_code, r.headers.get("server"), len(r.text))
+          PY
+
       - name: Ejecutar buscador de precios
         working-directory: buscador_precios
         env:
