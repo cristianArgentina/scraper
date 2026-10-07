@@ -84,7 +84,7 @@ LINEAS = [
     {
         "nombre": "Nivea Creme 150",
         "busqueda": "nivea-creme-150",
-        "busqueda_por_sitio": {"maxidescuento": "creme lata", "paradineiro": "creme lata"},
+        "busqueda_por_sitio": {"maxidescuento": "creme lata", "paradineiro": "creme lata", "coto": "nivea lata"},
         "incluir": [r"(?=.*creme)(?=.*150)"],
         "excluir": [],
     },
