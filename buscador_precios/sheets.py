@@ -46,6 +46,75 @@ def obtener_credenciales_google():
     )
 
 
+# ---------------------------------------------------------------------------
+# REEMPLAZO de escribir_en_google_sheets() en tu módulo de Google Sheets.
+#
+# Pegá estas definiciones en lugar de la función actual. No necesita imports
+# nuevos (usa `gspread`, que ya importás). El resto del módulo (imágenes,
+# credenciales, etc.) queda igual.
+#
+# Qué hace distinto: en vez de agregar siempre todas las filas, compara cada
+# lectura con la última registrada para ese (sitio + sku):
+#   - si precio, disponibilidad y error son iguales -> NO agrega fila, solo
+#     actualiza "fecha_ultima_escritura" de la fila existente;
+#   - si algo cambió (o el producto es nuevo)       -> agrega fila nueva.
+# ---------------------------------------------------------------------------
+
+COL_ULTIMA_ESCRITURA = "fecha_ultima_escritura"
+
+ENCABEZADOS_LOG = [
+    "fecha",
+    "linea",
+    "producto",
+    "sitio",
+    "precio",
+    "disponibilidad",
+    "error",
+    "url",
+    "ean",
+    "sku",
+    COL_ULTIMA_ESCRITURA,
+]
+
+COLUMNAS_OBLIGATORIAS = ("sitio", "sku", "url", "precio", "disponibilidad", "error")
+
+
+def _texto(valor):
+    """Normaliza a texto comparable (la hoja puede devolver 8133249 o 8133249.0)."""
+    if valor is None:
+        return ""
+    if isinstance(valor, float) and valor.is_integer():
+        return str(int(valor))
+    return str(valor).strip()
+
+
+def _precio(valor):
+    """Normaliza precio: número redondeado a 2 decimales, o texto si no se puede."""
+    if valor is None or valor == "":
+        return ""
+    if isinstance(valor, (int, float)):
+        return round(float(valor), 2)
+    s = str(valor).strip().replace("$", "").replace(" ", "")
+    if "," in s:  # formato AR: 7.852,95
+        s = s.replace(".", "").replace(",", ".")
+    try:
+        return round(float(s), 2)
+    except ValueError:
+        return s
+
+
+def _clave(sitio, sku, url):
+    """Identifica 'un producto en un comercio'. Usa la url si no hay sku."""
+    identificador = _texto(sku) or _texto(url)
+    # lstrip("0"): Sheets guarda "0123" como número 123; así ambos lados coinciden
+    return (_texto(sitio), identificador.lstrip("0"))
+
+
+def _firma(precio, disponibilidad, error):
+    """Lo que, si cambia, convierte una lectura en 'nueva'."""
+    return (_precio(precio), _texto(disponibilidad), _texto(error))
+
+
 def escribir_en_google_sheets(filas: list):
 
     creds = obtener_credenciales_google()
@@ -59,44 +128,106 @@ def escribir_en_google_sheets(filas: list):
 
     except gspread.exceptions.WorksheetNotFound:
 
-        hoja = planilla.add_worksheet(title=NOMBRE_HOJA_LOG, rows=2000, cols=10)
-
-        hoja.append_row(
-            [
-                "fecha",
-                "linea",
-                "producto",
-                "sitio",
-                "precio",
-                "disponibilidad",
-                "error",
-                "url",
-                "ean",
-                "sku",
-            ]
+        hoja = planilla.add_worksheet(
+            title=NOMBRE_HOJA_LOG, rows=2000, cols=len(ENCABEZADOS_LOG)
         )
 
-    filas_para_subir = [
-        [
-            f["fecha"],
-            f["linea"],
-            f["producto"],
-            f["sitio"],
-            f["precio"],
-            f["disponibilidad"],
-            f["error"],
-            f["url"],
-            f.get("ean"),
-            f.get("sku"),
-        ]
-        for f in filas
-    ]
+        hoja.append_row(ENCABEZADOS_LOG)
 
-    hoja.append_rows(filas_para_subir, value_input_option="USER_ENTERED")
+    # Se lee con valores "crudos" para que los precios vengan como números
+    # y no como texto formateado ("7852,95").
+    valores = hoja.get_all_values(value_render_option="UNFORMATTED_VALUE")
+
+    if not valores:
+        hoja.append_row(ENCABEZADOS_LOG)
+        valores = [list(ENCABEZADOS_LOG)]
+
+    encabezados = [str(x).strip().lower() for x in valores[0]]
+
+    # Hoja vieja sin la columna nueva: se agrega al final del encabezado
+    if COL_ULTIMA_ESCRITURA not in encabezados:
+        encabezados.append(COL_ULTIMA_ESCRITURA)
+        if hoja.col_count < len(encabezados):
+            hoja.resize(cols=len(encabezados))
+        hoja.update_cell(1, len(encabezados), COL_ULTIMA_ESCRITURA)
+
+    posicion = {nombre: i for i, nombre in enumerate(encabezados)}
+
+    faltantes = [c for c in COLUMNAS_OBLIGATORIAS if c not in posicion]
+    if faltantes:
+        raise RuntimeError(
+            f"La hoja '{NOMBRE_HOJA_LOG}' no tiene las columnas: {faltantes}"
+        )
+
+    def celda(fila, nombre):
+        i = posicion[nombre]
+        return fila[i] if i < len(fila) else ""
+
+    # Última lectura conocida de cada (sitio, sku): (nro_de_fila, firma).
+    # Se asume que la hoja está en orden cronológico (la última aparición gana).
+    ultimo = {}
+
+    for nro_fila, fila in enumerate(valores[1:], start=2):
+        k = _clave(celda(fila, "sitio"), celda(fila, "sku"), celda(fila, "url"))
+        ultimo[k] = (
+            nro_fila,
+            _firma(
+                celda(fila, "precio"),
+                celda(fila, "disponibilidad"),
+                celda(fila, "error"),
+            ),
+        )
+
+    col_ultima = posicion[COL_ULTIMA_ESCRITURA] + 1  # 1-based para A1
+    filas_nuevas = []
+    actualizaciones = []
+
+    for f in filas:
+
+        k = _clave(f["sitio"], f.get("sku"), f["url"])
+        firma = _firma(f["precio"], f["disponibilidad"], f["error"])
+        previo = ultimo.get(k)
+
+        if previo and previo[1] == firma:
+            # Repetida: solo se extiende la "fecha de última escritura".
+            # previo[0] is None => ya se agregó en esta misma corrida.
+            if previo[0] is not None:
+                actualizaciones.append(
+                    {
+                        "range": gspread.utils.rowcol_to_a1(previo[0], col_ultima),
+                        "values": [[f["fecha"]]],
+                    }
+                )
+            continue
+
+        datos = {
+            "fecha": f["fecha"],
+            "linea": f["linea"],
+            "producto": f["producto"],
+            "sitio": f["sitio"],
+            "precio": f["precio"],
+            "disponibilidad": f["disponibilidad"],
+            "error": f["error"],
+            "url": f["url"],
+            "ean": f.get("ean"),
+            "sku": f.get("sku"),
+            COL_ULTIMA_ESCRITURA: f["fecha"],
+        }
+
+        filas_nuevas.append([datos.get(col, "") for col in encabezados])
+        ultimo[k] = (None, firma)
+
+    if actualizaciones:
+        hoja.batch_update(actualizaciones, value_input_option="USER_ENTERED")
+
+    if filas_nuevas:
+        hoja.append_rows(filas_nuevas, value_input_option="USER_ENTERED")
 
     print(
-        f"\n{len(filas_para_subir)} filas subidas a la pestaña "
-        f"'{NOMBRE_HOJA_LOG}' del Google Sheet."
+        f"\nPestaña '{NOMBRE_HOJA_LOG}': {len(filas_nuevas)} filas nuevas "
+        f"(precio/disponibilidad cambió o producto nuevo), "
+        f"{len(actualizaciones)} lecturas repetidas (solo se actualizó "
+        f"'{COL_ULTIMA_ESCRITURA}')."
     )
 
 
