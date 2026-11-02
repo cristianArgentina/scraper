@@ -102,4 +102,10 @@ LINEAS = [
             r"(shampoo|acondicionador).*\b300\s*(ml|cc)",
         ],
     },
+    {
+        "nombre": "Dermaglos",
+        "busqueda": "dermaglos-solar",
+        "incluir": [],
+        "excluir": [],
+    },
 ]
