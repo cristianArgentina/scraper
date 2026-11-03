@@ -106,6 +106,6 @@ LINEAS = [
         "nombre": "Dermaglos",
         "busqueda": "dermaglos-solar",
         "incluir": [],
-        "excluir": ["rayito", "capilatis", "aveno", "off", "nivea", "villeneuve", "bagovit", "ojos", "uñas", "dia", "dermaglos ultra", "cocoa beach"],
+        "excluir": ["rayito", "capilatis", "aveno", "off", "nivea", "villeneuve", "bagovit", "ojos", "uñas", "dia", "cocoa beach", "ultra"],
     },
 ]
