@@ -2,8 +2,7 @@ name: Actualizar precios
 
 on:
   schedule:
-    - cron: '7 7 * * *'
-      timezone: 'America/Argentina/Buenos_Aires'
+    - cron: '7 12 * * *'
 
   workflow_dispatch:
 
