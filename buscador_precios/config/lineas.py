@@ -50,7 +50,7 @@ LINEAS = [
         "nombre": "Extraordinario",
         "busqueda": "extraordinario",
         "incluir": ["elvive", "extraordinario"],
-        "excluir": ["coco", "rizos", "libro", r"200\s*(ml|cc)", r"750\s*(ml|cc)"],
+        "excluir": ["coco", "retouch", "rizos", "libro", r"200\s*(ml|cc)", r"750\s*(ml|cc)"],
     },
     {
         "nombre": "Dream Liso",
@@ -106,6 +106,6 @@ LINEAS = [
         "nombre": "Dermaglos",
         "busqueda": "dermaglos-solar",
         "incluir": [],
-        "excluir": ["rayito", "capilatis", "aveno", "off", "nivea", "villeneuve", "bagovit", "ojos", "uñas", "dia", "cocoa beach", "ultra", "hipoglos", "hombre", "serum", "hialur", "serúm", "sérum", "anti", "bb", "noche", "profunda", "piel", "tonico", "inmediata", "intensiva", "matificante", "de día", "terapéutica", "acnñ", "exfoliante", "nutritiva", "despigmentante", "ttp"  ],
+        "excluir": ["rayito", "capilatis", "aveno", "off", "nivea", "villeneuve", "bagovit", "ojos", "uñas", "dia", "cocoa beach", "ultra", "hipoglos", "hombre", "serum", "hialur", "serúm", "sérum", "anti", "bb", "noche", "profunda", "piel", "tonico", "inmediata", "intensiva", "matificante", "de día", "terapéutica", "acnñ", "exfoliante", "nutritiva", "despigmentante", "ttp", "compacta"],
     },
 ]
