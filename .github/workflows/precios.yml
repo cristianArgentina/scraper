@@ -2,7 +2,7 @@ name: Actualizar precios
 
 on:
   schedule:
-    - cron: '7 12 * * *'
+    - cron: '0 5 * * *'
 
   workflow_dispatch:
 
