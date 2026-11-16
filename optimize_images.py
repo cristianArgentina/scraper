@@ -24,8 +24,8 @@ from gspread.utils import rowcol_to_a1
 from PIL import Image, ImageOps
 
 # ----------------------------- Configuración -----------------------------
-SHEET_ID = os.environ["SHEET_ID"]                       # ID de la planilla (está en la URL)
-WORKSHEET = os.getenv("WORKSHEET", "")                  # nombre de la pestaña ("" = la primera)
+SHEET_ID = os.environ["1823752636"]                       # ID de la planilla (está en la URL)
+WORKSHEET = os.getenv("WORKSHEET", "Imagenes_Productos")                  # nombre de la pestaña ("" = la primera)
 GOOGLE_CREDS = os.getenv("GOOGLE_CREDS", "service_account.json")
 
 GITHUB_REPO = os.environ["GITHUB_REPO"]                 # "usuario/repo"
